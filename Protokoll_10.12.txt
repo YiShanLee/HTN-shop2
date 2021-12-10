@@ -1,0 +1,26 @@
+Protokoll 10.12.:
+
+-> Ziel: erstmal Pseudocode umsetzen mit sehr einfachem nondeterministically choose
+		-> dafür auch HDDL einlesen
+
+-> einlesen: 
+			read-domain -> *tasks*, *actions*, *methods*, *types*, *predicates*
+			read-problem -> *goal-tasks*, *status*, *objects*
+			
+ aus Domäne: - Liste mit tasks (Name, Parameter) -> name, *parameter*, *task-constraints* (-> alle tasks, die vor einer task erledigt sein müssen)              
+			 - Liste mit Aktionen (Namen, Parameter, zugehörige task,preconditions, Effekte) -> name, *parameter*, task, *pre*, *effect+*, *effect-*  
+			 - Liste mit Methoden (Namen, Parameter,zugehörige task,preconditions, Subtasks) -> name, *parameter*, task, *pre*, *subtasks*
+			 - types als einzelnes?
+			 - Prädikate als einzelnes?
+			 - ordering?
+			
+ aus Problem: - Liste mit Objekten? -> (name, type)
+			  - Status (:init) -> *status* -> (predicate, True/False)
+			  - tasks -> was wir machen wollen ("Ziel") -> name, *parameter*
+			 
+-> Pseudocode: - Methode, die bei oder nach dem Einlesen untersucht, ob task eine primitive oder compound task ist
+					-> zum Beispiel über Vergleich mit Aktionen, weil Aktionen genauso heißen wie primitive task
+			  - für "nondeterministically choose" erstmal einfach nur das 1. Element aus der Liste auswählen
+			  - um T0 zu erstellen: nur die tasks, deren *task-constraints*-Liste empty ist
+			  - bei Methoden: Subtasks müssen in *task-constraints*-Listen entsprechend eingefügt werden, wo vorher die ersetzte task stand
+			  - und wenn tasks aus T enfernt werden darauf achten, dass sie auch aus allen *task-constraints*-Listen gelöscht wird
