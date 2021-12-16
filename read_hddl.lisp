@@ -15,3 +15,32 @@ read-problem -> *goal-tasks*, *status*, *objects*
 			  - Status (:init) -> *status* -> (predicate, True/False)
 			  - tasks -> was wir machen wollen ("Ziel") -> name, *parameter*
 |#
+
+;; aus Projekt-Sitzung, Vorschlag von Prof. Wolter zum Einlesen:
+(defun read-file (filename)
+  (with-open-file (in filename)
+    (read in))
+  )
+
+;; vielleicht noch Fehlermeldung hinzufügen, wenn nicht "domain" im filetitle?
+(defun read-hddl-domain (filename)
+  (print "Reading domain-file...")
+  ;;(if (eql("NIL" ( search (".hddl" filestring))))
+   ;; (error "This function can only read a HDDL file - make sure the file you want to read ends in .hddl! "))
+  (read-file filename)
+;; wenn Zeile mit :TYPES beginnt -> in types-Liste (nötig?)
+;; wenn Zeile mit :PREDICATES beginnt -> in predicates-Liste
+;; wenn Zeile mit :TASK beginnt -> in task-Liste
+;; wenn Zeile mit :METHOD beginnt -> in method-Liste
+;; wenn Zeile mit :ACTION beginnt -> in action-Liste
+  )
+
+(defun read-hddl-problem (filename)
+  (print "Reading problem-file...")
+  (read-file filename)
+  ;; wenn Zeile mit :OBJECTS beginnt -> in objects-Liste
+  ;; wenn Zeile mit :HTN :TASKS beginnt -> in task-Liste, Achtung: AND ggf. löschen
+  ;; wenn Zeile mit :INIT beginnt -> in status-Liste
+  )
+
+	     
