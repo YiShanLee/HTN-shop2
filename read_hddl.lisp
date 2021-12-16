@@ -19,14 +19,15 @@ read-problem -> *goal-tasks*, *status*, *objects*
 ;; aus Projekt-Sitzung, Vorschlag von Prof. Wolter zum Einlesen:
 (defun read-file (filename)
   (with-open-file (in filename)
-    (read in))
+    (read in)
+    ()
   )
 
 ;; vielleicht noch Fehlermeldung hinzufügen, wenn nicht "domain" im filetitle?
 (defun read-hddl-domain (filename)
   (print "Reading domain-file...")
-  ;;(if (eql("NIL" ( search (".hddl" filestring))))
-   ;; (error "This function can only read a HDDL file - make sure the file you want to read ends in .hddl! "))
+  (unless (search ".hddl" filename)  ;;search:http://cl-cookbook.sourceforge.net/strings.html#find-sub 
+      (error "This function can only read a HDDL file - make sure the file you want to read ends in .hddl! "))
   (read-file filename)
 ;; wenn Zeile mit :TYPES beginnt -> in types-Liste (nötig?)
 ;; wenn Zeile mit :PREDICATES beginnt -> in predicates-Liste
@@ -37,6 +38,8 @@ read-problem -> *goal-tasks*, *status*, *objects*
 
 (defun read-hddl-problem (filename)
   (print "Reading problem-file...")
+  (unless (search ".hddl" filename) 
+      (error "This function can only read a HDDL file - make sure the file you want to read ends in .hddl! "))
   (read-file filename)
   ;; wenn Zeile mit :OBJECTS beginnt -> in objects-Liste
   ;; wenn Zeile mit :HTN :TASKS beginnt -> in task-Liste, Achtung: AND ggf. löschen
