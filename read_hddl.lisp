@@ -4,7 +4,7 @@ HDDL-einlesen: DomÃ¤ne + Problem!
 read-domain -> *tasks*, *actions*, *methods*, *types*, *predicates*
 read-problem -> *goal-tasks*, *status*, *objects*
 			
- -> DomÃ¤ne: - Liste mit tasks (Name, Parameter) -> name, *parameter*, *task-constraints* (-> alle tasks, die vor einer task erledigt sein mÃ¼ssen)              
+ -> Domäne: - Liste mit tasks (Name, Parameter) -> name, *parameter*, *task-constraints* (-> alle tasks, die vor einer task erledigt sein mÃ¼ssen)              
 			 - Liste mit Aktionen (Namen, Parameter, zugehÃ¶rige task,preconditions, Effekte) -> name, *parameter*, task, *pre*, *effect+*, *effect-*  
 			 - Liste mit Methoden (Namen, Parameter,zugehÃ¶rige task,preconditions, Subtasks) -> name, *parameter*, task, *pre*, *subtasks*
 			 - types als einzelnes?
@@ -19,49 +19,67 @@ read-problem -> *goal-tasks*, *status*, *objects*
 ;; aus Projekt-Sitzung, Vorschlag von Prof. Wolter zum Einlesen:
 (defun read-file (filename)
   (with-open-file (in filename)
-    (read filename)
-	(let (*elements* (make-list 0))
-		(when (eql (read-char in) ":")
-		(append (*elements* (read-delimited-list #\( #\: in)))))))
-	
+    (read in))) ;;liegt schon als Liste vor! bspw. (first *) first des letzten Aufrufs
+   
 
-#|(with-open-file (instream infile :direction :input :if-does-not-exist nil)
-    (when instream 
-      (let ((string (make-string (file-length instream))))
-        (read-sequence string instream)
-        string)))) 
-		https://riptutorial.com/common-lisp/example/19473/reading-and-writing-entire-files-to-and-from-strings|#
 
- #| (set-macro-character #\’
-#’(lambda (stream char)
-(list ’quote (read stream t nil t))))  -> aus Buch on lisp|#
-
-;; vielleicht noch Fehlermeldung hinzufügen, wenn nicht "domain" im filetitle?
 (defun read-hddl-domain (filename)
   (print "Reading domain-file...")
   (unless (search ".hddl" filename) ;;search:http://cl-cookbook.sourceforge.net/strings.html#find-sub 
     (error "This function can only read a HDDL file - make sure the file you want to read ends in .hddl! "))
-  (let ((*domain* (read-file filename)) (*types* (make-list 0)) 
-	(*predicates* (make-list 0)) (*tasks* (make-list 0))(*methods* (make-list 0)) (*actions* (make-list 0)))
-   (dolist (element *domain*)
-			(case 
-			((search ":types" element :start 1) (append *types* )) ;; wenn Zeile mit :TYPES beginnt -> in types-Liste (nötig?)
-			((search ":predicates" element :start 1) (append *predicates* element)) ;; wenn Zeile mit :PREDICATES beginnt -> in predicates-Liste
-			((search ":task" element :start 1) (append *tasks* element)) ;; wenn Zeile mit :TASK beginnt -> in task-Liste
-			((search ":method" element :start 1) (append *methods* element)) ;; wenn Zeile mit :METHOD beginnt -> in method-Liste
-			((search ":action" element :start 1) (append *actions* element)) ;; wenn Zeile mit :ACTION beginnt -> in action-Liste
-		;;return list of sorted lists?
+  (unless (search "domain" filename) 
+    (error "This function can only read a domain-HDDL file - make sure the file you want to read is the domain-file! "))
+  (let* ((*domain* (read-file filename))
+	 *types*
+	 *requirements*
+	*predicates* 
+	*tasks*
+	*methods*
+	 *actions*
+	 look-up '((:types . *types*)(:requirements . *requirements) (:predicates . *predicates*) (:task . *tasks*) (:method . *methods*) (:action . *actions*)))
+    (dolist (element *domain*)
+      (let ((key (assoc (first element) look-up)))
+	(when key
+	  (push element (cdr key)))))))
+			
 		
-  ))))
+;; oder als defstruct :action -> Objekt
+
+;; Datenstruktur für Method etc bauen, element zu method intialisieren;
+;; Datenstruktur an HDDL orientieren (defstruct...) oder auch Klasse
+;; requirements -> z.B. Typing aktiviert erst types
+;; look-up könnte auch mit constructor geschrieben werden zB für Methoden-Datenstruktur
+;; Typing könnte dann zB andere Konstruktoren laden
+;; bei Klassen könnte zB von Methode noch eine Klasse Methoden abgehen, die auch negative
+;; preconditions haben kann; dann zwischen Klassen umschalten
+;; erstmal mit Struct
+		       
 
 (defun read-hddl-problem (filename)
   (print "Reading problem-file...")
   (unless (search ".hddl" filename) 
-      (error "This function can only read a HDDL file - make sure the file you want to read ends in .hddl! "))
+    (error "This function can only read a HDDL file - make sure the file you want to read ends in .hddl! "))
+  (unless (search "problem" filename) 
+    (error "This function can only read a problem-HDDL file - make sure the file you want to read is the problem-file! "))
   (read-file filename)
-  ;; wenn Zeile mit :OBJECTS beginnt -> in objects-Liste
-  ;; wenn Zeile mit :HTN :TASKS beginnt -> in task-Liste, Achtung: AND ggf. löschen
-  ;; wenn Zeile mit :INIT beginnt -> in status-Liste
-  )
+  (let* ((*problem* (read-file filename))
+	 *objects*
+	 *tasks*
+	 *status*
+	 look-up '((:objects . *objects*)(:htn . *tasks*) (:status . *status*)))
+   (dolist (element *problem*)
+     (let ((key (assoc (first element) look-up)))
+       (when key
+	 (push element (cdr key)))))))
+
+#| so könnten alle Elemente entfernt werden, die keine Methoden sind, also nicht mit :method beginnen: (remove-if-not :method HDDL :key #'first)
+oder (find :method HDDL :key #'first) -> dann wird es gefunden
+matching durch destructuring-bind:
+(destructuring-bind ((a b) . rest) '((1 2) (3 4))   (+ a b)) ----> 3
+-> findet dann genau die angegebenen Elemente
+im onlist: destructuring-bind mit ?k, also Variablen; so können wir pattern-matchen mit den Variablen und unifizieren; mal im Buch schauen und auch in dessen
+online-Code schauen und Teile herausnehmen
+|#
+
 
 	     
