@@ -13,30 +13,60 @@
     (close stream)))
 ;; idea2 
 ;; defdomain construction to read item(argument)
-
+(defstruct problem
+  (namep)
+  (namedo)
+  (objects) 
+  (htn) 
+  (init) 
+  (goal)
+  )
+;; if type is needed? 
 (defstruct domain
-  name requirements types predicate tasks methods actions)
+  (namedo) 
+  (requirements) 
+  (types) 
+  (predicates) 
+  (tasks) 
+  (methods) 
+  (actions)
+  )
 
-(defstruct problem-struct
-  name domain-name objects htn init goal)
+; ;; tasks
+; (defstruct task
+;   parameters precondition effect)
+; ;; methods 
+; (defstruct method
+;   parameters task subtasks ordering)
+
+; ;; actions
+; (defstruct action
+;   parameters preconditions effect)
+
 ; destructuring-bind for the datasets separation (see reference on "practical common lisp- destructuring-bind")
-(defun destructuring-bind) (matching pattern)
-;;make domain to get individual data
-(defun make-domain (name requirements types predicate tasks methods actions)
-  (list :name name :requirements requirements :types types :predicate predicate :task tasks :methods methods :actions actions))
-;still need to amend as if condition
-(defun set-domain ()
-  `(make-domain
-        :name `(,@(mapcar #'cadadr *input*))
-        :requirements `(,@(mapcar #'caddr *input*))
-        :types `(,@(mapcar #'cadddr *input*)) 
-        ;:predicates ,@(mapcar #)
-        ;:tasks
-        ;:methods
-        ;:actions  
-  ; amend as (let* (key (mapcar ))
-  ))
 
+;;list domain's elements to get individual data
+;; need another function to retrieve the datasets of each element
+; {:namedo `(,@(mapcar #'cadadr *input*))
+;                                 :requirements `(,@(mapcar #'caddr *input*))
+;                                 :types `(,@(mapcar #'cadddr *input*)) 
+;                                 :predicates `(,@(mapcar #'cadr `(,@(mapcar #'cdddr *input*)))
+;                                 :tasks `(,@(mapcar #'cadr `(,@(mapcar #'cddddr *input*))))
+                                ;:methods
+                                ;:actions  }
+(defvar *domains* (make-hash-table)) 
+(defun defdomain (name &optional requirement type predicate task method action) 
+        (setf (gethash name *domains*) 
+              (make-domain
+                                :namedo name
+                                :requirements requirement
+                                :types type 
+                                :predicates predicate
+                                :tasks task
+                                :methods method
+                                :actions action
+                          ; amend as (let* (key (mapcar ))
+                        )  ))
 
 
 ;; idea3 
