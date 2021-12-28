@@ -51,6 +51,7 @@
                                 ;:actions  }
                                 
 ;; <finished> with a hash table to retrieve domains as struct
+;; wish to add one domain using => (defdomain "transfer" ... )
 (defvar *domains* (make-hash-table)) 
 (defun defdomain (name &optional requirement type predicate task method action) 
         (setf (gethash name *domains*) 
