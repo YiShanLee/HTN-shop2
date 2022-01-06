@@ -36,11 +36,32 @@ read-problem -> *goal-tasks*, *status*, *objects*
 	*tasks*
 	*methods*
 	 *actions*
-	 look-up '((:types . *types*)(:requirements . *requirements) (:predicates . *predicates*) (:task . *tasks*) (:method . *methods*) (:action . *actions*)))
+	 look-up '((:types . *types*)(:requirements . *requirements*) (:predicates . *predicates*) (:task . *tasks*) (:method . *methods*) (:action . *actions*)))
     (dolist (element *domain*)
       (let ((key (assoc (first element) look-up)))
 	(when key
-	  (push element (cdr key)))))))
+	  (push element (cdr key)))))
+
+    (dolist (element *tasks*)
+      (destructuring-bind (name . parameters) 'element) 
+      (make-hddl-task (:name name :parameters parameters)))
+
+    (dolist (element *methods*)
+      (destructuring-bind (x name y parameters z task y subtasks) 'element) 
+      (make-hddl-method (:name name :parameters parameters :task task :subtasks subtasks)))
+
+    (dolist (element *actions*)
+      (destructuring-bind (x name y parameters z preconditions y effects) 'element) 
+      (make-hddl-action (:name name :parameters parameters :preconditions preconditions :effects  effects)))
+
+    (dolist (element *predicates*)
+      (destructuring-bind (name . parameters) 'element) 
+      (make-hddl-predicate (:name name :parameters parameters)))
+
+    (setq domain (make-hddl-domain (:name (second '*domain*) :requirements *requirements* :types *types* :predicates *predicates* :tasks *tasks* :methods *methods* :actions *actions)))
+
+    domain
+    ))
 			
 		
 ;; oder als defstruct :action -> Objekt
@@ -61,7 +82,6 @@ read-problem -> *goal-tasks*, *status*, *objects*
     (error "This function can only read a HDDL file - make sure the file you want to read ends in .hddl! "))
   (unless (search "problem" filename) 
     (error "This function can only read a problem-HDDL file - make sure the file you want to read is the problem-file! "))
-  (read-file filename)
   (let* ((*problem* (read-file filename))
 	 *objects*
 	 *tasks*
@@ -80,6 +100,15 @@ matching durch destructuring-bind:
 im onlist: destructuring-bind mit ?k, also Variablen; so können wir pattern-matchen mit den Variablen und unifizieren; mal im Buch schauen und auch in dessen
 online-Code schauen und Teile herausnehmen
 |#
+
+;; Strukturen für die einzelnen Elemente der Domäne + die Domäne selbst
+(defstruct hddl-predicate name parameters)
+(defstruct hddl-method name parameters task subtasks);;Achtung: Subtasks können auch ordered-subtasks heißen
+(defstruct hddl-action name parameters preconditions effects)
+(defstruct hddl-domain name requirements types predicates tasks methods actions)
+(defstruct hddl-task name parameter)
+(defstruct hddl-object name type)
+(defstruct hddl-problem name domain objects tasks ordering constraints init-status)
 
 
 	     
