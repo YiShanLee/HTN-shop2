@@ -40,28 +40,40 @@ read-problem -> *goal-tasks*, *status*, *objects*
     (dolist (element *domain*)
       (let ((key (assoc (first element) look-up)))
 	(when key
-	  (push element (cdr key)))))
+	  (push element (cdr key))))) ;; add elements of the domain to the appropriate lists
 
+    ;; transform elements of the domain-lists into the appropriate structures
+    (let (*hddl-tasks*
+	  *hddl-methods*
+	  *hddl-actions*
+	  *hddl-predicates*)
+      
     (dolist (element *tasks*)
       (destructuring-bind (name . parameters) 'element) 
-      (make-hddl-task (:name name :parameters parameters)))
+      (push (make-hddl-task (:name name :parameters parameters)) *hddl-tasks*))
 
     (dolist (element *methods*)
       (destructuring-bind (x name y parameters z task y subtasks) 'element) 
-      (make-hddl-method (:name name :parameters parameters :task task :subtasks subtasks)))
+      (push (make-hddl-method
+	     (:name name :parameters parameters :task task :subtasks subtasks))
+	    *hddl-methods*))
 
     (dolist (element *actions*)
       (destructuring-bind (x name y parameters z preconditions y effects) 'element) 
-      (make-hddl-action (:name name :parameters parameters :preconditions preconditions :effects  effects)))
+      (push (make-hddl-action
+	     (:name name :parameters parameters :preconditions preconditions :effects  effects))
+	    *hddl-actions*))
 
     (dolist (element *predicates*)
       (destructuring-bind (name . parameters) 'element) 
-      (make-hddl-predicate (:name name :parameters parameters)))
+      (push (make-hddl-predicate (:name name :parameters parameters)) *hddl-predicates*))
 
-    (setq domain (make-hddl-domain (:name (second '*domain*) :requirements *requirements* :types *types* :predicates *predicates* :tasks *tasks* :methods *methods* :actions *actions)))
+      (setq domain (make-hddl-domain (:name (second '*domain*) :requirements *requirements*
+				      :types *types* :predicates *predicates* :tasks *tasks*
+				      :methods *methods* :actions *actions)))
 
     domain
-    ))
+    )))
 			
 		
 ;; oder als defstruct :action -> Objekt
@@ -85,12 +97,26 @@ read-problem -> *goal-tasks*, *status*, *objects*
   (let* ((*problem* (read-file filename))
 	 *objects*
 	 *tasks*
+	 *ordering*
+	 *constraints*
 	 *status*
-	 look-up '((:objects . *objects*)(:htn . *tasks*) (:status . *status*)))
+	 look-up '((:objects . *objects*)(:htn :tasks . *tasks*)(:ordering . *ordering*)(:constraints . *constraints) (:status . *status*)))
    (dolist (element *problem*)
      (let ((key (assoc (first element) look-up)))
        (when key
-	 (push element (cdr key)))))))
+	 (push element (cdr key)))))
+
+    ;; transform elements of the domain-lists into the appropriate structures
+    (let (*hddl-tasks*)
+    ;;objects noch machen: Schwierigkeit: Typen mit - müssen allen davorstehenden Objekten hinzugefügt werden
+    (dolist (element *tasks*)
+      (destructuring-bind (name . parameters) 'element) 
+      (push (make-hddl-task (:name name :parameters parameters)) *hddl-tasks*))
+
+    (setq problem (make-hddl-problem (:name (second '*problem*) :requirements (third '*problem*)
+				      :objects *objects* :tasks *tasks* :ordering *ordering* :constraints *constraints :init-status *status*))))
+
+    problem))
 
 #| so könnten alle Elemente entfernt werden, die keine Methoden sind, also nicht mit :method beginnen: (remove-if-not :method HDDL :key #'first)
 oder (find :method HDDL :key #'first) -> dann wird es gefunden
