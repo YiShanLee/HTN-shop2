@@ -69,8 +69,8 @@ read-problem -> *goal-tasks*, *status*, *objects*
       (push (make-hddl-predicate (:name name :parameters parameters)) *hddl-predicates*))
 
       (setq domain (make-hddl-domain (:name (second '*domain*) :requirements *requirements*
-				      :types *types* :predicates *predicates* :tasks *tasks*
-				      :methods *methods* :actions *actions)))
+				      :types *types* :predicates *hddl-predicates* :tasks *hddl-tasks*
+				      :methods *hddl-methods* :actions *hddl-actions)))
 
     domain
     )))
@@ -127,7 +127,7 @@ im onlist: destructuring-bind mit ?k, also Variablen; so können wir pattern-mat
 online-Code schauen und Teile herausnehmen
 |#
 
-;; Strukturen für die einzelnen Elemente der Domäne + die Domäne selbst
+;; Strukturen für die einzelnen Elemente der Domäne/Problem + die Domäne/Problem selbst
 (defstruct hddl-predicate name parameters)
 (defstruct hddl-method name parameters task subtasks);;Achtung: Subtasks können auch ordered-subtasks heißen
 (defstruct hddl-action name parameters preconditions effects)
