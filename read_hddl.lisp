@@ -110,7 +110,8 @@ read-problem -> *goal-tasks*, *status*, *objects*
 	 *ordering*
 	 *constraints*
 	 *status*
-	 look-up '((:objects . *objects*)(:htn :tasks . *tasks*)(:ordering . *ordering*)(:constraints . *constraints*) (:status . *status*)))
+	 problem
+	 (look-up '((:objects . *objects*)(:htn :tasks . *tasks*)(:ordering . *ordering*)(:constraints . *constraints*) (:status . *status*))))
    (dolist (element *problem*)
      (let ((key (assoc (first element) look-up)))
        (when key
@@ -121,10 +122,10 @@ read-problem -> *goal-tasks*, *status*, *objects*
     ;;objects noch machen: Schwierigkeit: Typen mit - müssen allen davorstehenden Objekten hinzugefügt werden
     (dolist (element *tasks*)
       (destructuring-bind (x name . parameters) 'element
-	(push (make-hddl-task (:name name :parameters parameters)) *hddl-tasks*)))
+	(push (make-hddl-task :name name :parameters parameters) *hddl-tasks*)))
 
-    (setq problem (make-hddl-problem (:name (second '*problem*) :requirements (third '*problem*)
-				      :objects *objects* :tasks *tasks* :ordering *ordering* :constraints *constraints :init-status *status*))))
+    (setq problem (make-hddl-problem :name (second *problem*) :domain (third *problem*)
+				      :objects *objects* :tasks *tasks* :ordering *ordering* :constraints *constraints* :init-status *status*)))
 
     problem))
 
