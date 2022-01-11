@@ -16,15 +16,6 @@ read-problem -> *goal-tasks*, *status*, *objects*
 			  - tasks -> was wir machen wollen ("Ziel") -> name, *parameter*
 |#
 
-;; Strukturen für die einzelnen Elemente der Domäne/Problem + die Domäne/Problem selbst
-(defstruct hddl-predicate name parameters)
-(defstruct hddl-method name parameters task subtasks);;Achtung: Subtasks können auch ordered-subtasks heißen
-(defstruct hddl-action name parameters preconditions effects)
-(defstruct hddl-domain name requirements types predicates tasks methods actions)
-(defstruct hddl-task name parameter)
-(defstruct hddl-object name type)
-(defstruct hddl-problem name domain objects tasks ordering constraints init-status)
-
 ;; aus Projekt-Sitzung, Vorschlag von Prof. Wolter zum Einlesen:
 (defun read-file (filename)
   (with-open-file (in filename)
@@ -137,7 +128,14 @@ im onlist: destructuring-bind mit ?k, also Variablen; so können wir pattern-mat
 online-Code schauen und Teile herausnehmen
 |#
 
-
+;; Strukturen für die einzelnen Elemente der Domäne/Problem + die Domäne/Problem selbst
+(defstruct hddl-predicate name parameters)
+(defstruct hddl-method name parameters task subtasks);;Achtung: Subtasks können auch ordered-subtasks heißen
+(defstruct hddl-action name parameters preconditions effects)
+(defstruct hddl-domain name requirements types predicates tasks methods actions)
+(defstruct hddl-task name parameter)
+(defstruct hddl-object name type)
+(defstruct hddl-problem name domain objects tasks ordering constraints init-status)
 
 
 	     
