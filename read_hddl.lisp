@@ -33,57 +33,61 @@ read-problem -> *goal-tasks*, *status*, *objects*
 
 
 (defun read-hddl-domain (filename)
+   (declare (optimize debug))
   (print "Reading domain-file...")
   (unless (search ".hddl" filename) ;;search:http://cl-cookbook.sourceforge.net/strings.html#find-sub 
     (error "This function can only read a HDDL file - make sure the file you want to read ends in .hddl! "))
   (unless (search "domain" filename) 
     (error "This function can only read a domain-HDDL file - make sure the file you want to read is the domain-file! "))
-  (let* ((*domain* (read-file filename))
-	 *types*
-	 *requirements*
-	 *predicates* 
-	 *tasks*
-	 *methods*
-	 *actions*
-	 (look-up '((:types . *types*)(:requirements . *requirements*) (:predicates . *predicates*) (:task . *tasks*) (:method . *methods*) (:action . *actions*))))
+  (let* ((read-domain (read-file filename))
+	 types
+	 requirements
+	 predicates
+	 tasks
+	 methods
+	 actions
+	 #|mit ` und , vor den einzelnen Listen wird als key durch "assoc" nur bspw. (:requirements) verwendet; ohne die , wird der key (:requirements . requirements) richtig gefunden, requirements aber nicht als Liste erkannt; mit `und ' innerhalb der Paare läuft das Programm durch, gibt uns aber nur #S(HDDL-DOMAIN
+   :NAME (DOMAIN TRANSPORT)
+   :REQUIREMENTS NIL
+   :TYPES NIL
+   :PREDICATES NIL
+   :TASKS NIL
+   :METHODS NIL
+   :ACTIONS NIL)
+    aus |#
+	 (look-up `((:types . 'types)(:requirements . 'requirements) (:predicates . 'predicates) (:task . 'tasks) (:method . 'methods) (:action . 'actions))))
     ;; for each element of the domain-list search for its first element in the look-up list and
     ;; push it to the corresponding list (second half of the pair)
-    (dolist (element *domain*)
+    (dolist (element (cddr  read-domain))
       (let ((key (assoc (first element) look-up)))
 	(when key
 	  (push element (second key))))) ;; add elements of the domain to the appropriate lists
 
     ;; transform elements of the domain-lists into the appropriate structures
-    (let (*hddl-tasks*
-	  *hddl-methods*
-	  *hddl-actions*
-	  *hddl-predicates*
-	  domain)
-      
-      (dolist (element *tasks*)
-	(destructuring-bind (x name . parameters) 'element
-	  (push (make-hddl-task :name name :parameters parameters) *hddl-tasks*)))
-
-    (dolist (element *methods*)
-      (destructuring-bind (x name y parameters z task y subtasks) 'element
-	(push (make-hddl-method :name name :parameters parameters :task task :subtasks subtasks)
-	    *hddl-methods*)))
-
-    (dolist (element *actions*)
-      (destructuring-bind (x name y parameters z preconditions y effects) 'element
-	(push (make-hddl-action :name name :parameters parameters :preconditions preconditions :effects  effects)
-	    *hddl-actions*)))
-
-    (dolist (element *predicates*)
-      (destructuring-bind (name . parameters) 'element
-	(push (make-hddl-predicate :name name :parameters parameters) *hddl-predicates*)))
-
-      (setq domain (make-hddl-domain :name (second *domain*) :requirements *requirements*
-				      :types *types* :predicates *hddl-predicates* :tasks *hddl-tasks*
-				      :methods *hddl-methods* :actions *hddl-actions*))
-
-    domain
-    )))
+    (let ((hddl-tasks)
+	  (hddl-methods)
+	  (hddl-actions)
+	  (hddl-predicates)
+	  (domain))
+      ;;setq always returns the last binding
+      (setq hddl-tasks
+	    (loop for (x name . parameters) in tasks collect
+		  ;;(declare (ignore x))
+		  (make-hddl-task :name name :parameters parameters))
+	   hddl-methods
+	    (loop for (x name y parameters z task w subtasks) in methods collect
+		  ;;(declare (ignore x y z w))
+		  (make-hddl-method :name name :parameters parameters :task task :subtasks subtasks))
+	   hddl-actions
+	     (loop for (x name y parameters z preconditions w effects) in actions collect
+		  ;;(declare (ignore x y z w))
+		  (make-hddl-action :name name :parameters parameters :preconditions preconditions :effects  effects))
+	    hddl-predicates
+	    (loop for (name . parameters) in predicates collect
+			      	(make-hddl-predicate :name name :parameters parameters))
+	   domain (make-hddl-domain :name (second read-domain) :requirements requirements
+				      :types types :predicates hddl-predicates :tasks hddl-tasks
+				      :methods hddl-methods :actions hddl-actions)))))
 			
 		
 ;; oder als defstruct :action -> Objekt
@@ -99,33 +103,36 @@ read-problem -> *goal-tasks*, *status*, *objects*
 		       
 
 (defun read-hddl-problem (filename)
+  (declare (optimize debug))
   (print "Reading problem-file...")
   (unless (search ".hddl" filename) 
     (error "This function can only read a HDDL file - make sure the file you want to read ends in .hddl! "))
   (unless (search "problem" filename) 
     (error "This function can only read a problem-HDDL file - make sure the file you want to read is the problem-file! "))
-  (let* ((*problem* (read-file filename))
-	 *objects*
-	 *tasks*
-	 *ordering*
-	 *constraints*
-	 *status*
+  (let* ((read-problem (read-file filename))
+	 objects
+	 tasks
+	 ordering
+	 constraints
+	 status
 	 problem
-	 (look-up '((:objects . *objects*)(:htn :tasks . *tasks*)(:ordering . *ordering*)(:constraints . *constraints*) (:status . *status*))))
-   (dolist (element *problem*)
+	 ;; hier nochmal schauen, was wir wegen :htn :tasks zu machen ist!
+	 (look-up `((:objects . ,objects)(:tasks . ,tasks)(:ordering . ,ordering)(:constraints . ,constraints) (:status . ,status))))
+   (dolist (element (cdr read-problem))
      (let ((key (assoc (first element) look-up)))
        (when key
 	 (push element (second key)))))
 
     ;; transform elements of the domain-lists into the appropriate structures
-    (let (*hddl-tasks*)
+    (let (hddl-tasks)
     ;;objects noch machen: Schwierigkeit: Typen mit - müssen allen davorstehenden Objekten hinzugefügt werden
-    (dolist (element *tasks*)
-      (destructuring-bind (x name . parameters) 'element
-	(push (make-hddl-task :name name :parameters parameters) *hddl-tasks*)))
+    (dolist (element tasks)
+      (destructuring-bind (x name . parameters) element
+	(declare (ignore x))
+	(push (make-hddl-task :name name :parameters parameters) hddl-tasks)))
 
-    (setq problem (make-hddl-problem :name (second *problem*) :domain (third *problem*)
-				      :objects *objects* :tasks *tasks* :ordering *ordering* :constraints *constraints* :init-status *status*)))
+    (setq problem (make-hddl-problem :name (second problem) :domain (third problem)
+				      :objects objects :tasks tasks :ordering ordering :constraints constraints :init-status status)))
 
     problem))
 
