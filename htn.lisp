@@ -96,38 +96,6 @@ before generating any other subtasks in the task network
 |#
 ;-------------------------------------------------------------
 
-;; nondeterministic plan
-; if fail, put the failed path into failure
-(defmacro fail()
-  (if *paths*
-      `(make-failure :action ,@(*paths*))
-      failsysm))
-
-;; choose one action from tasks
-;; fehlt noch constraint filtering
-(defmacro choose (&rest tasks)
-  (if tasks
-      `(progn
-	 ,@(mapcar #'(lambda(task)
-		       ;(setq *t* ,@task)
-		       `(push ,@task *T*))
-		       (reverse (cdr tasks)))
-		   ,(car tasks))
-  `(fail)))
-  
-;; break down the task
-
-;; actions for the theta
-(defun unifier )
-;; nondeterministic choose
-;; fehlt noch constraint (task ordering)
-(defmacro nondeterministic-task (tasks)
-  )
-
-  ;; (find :method HDDL :key #'first)
-  ;; (remove-if-not :method HDDL :key #'first)
-  ;; (destructuring-bind ((a b) . rest) '((1 2) (3 4)) (+ a b))
-  ;; ?k (match ?a ?b) unification
 
 
 
