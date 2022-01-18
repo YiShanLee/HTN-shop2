@@ -40,29 +40,23 @@ read-problem -> *goal-tasks*, *status*, *objects*
   (unless (search "domain" filename) 
     (error "This function can only read a domain-HDDL file - make sure the file you want to read is the domain-file! "))
   (let* ((read-domain (read-file filename))
-	 types
+	 types 
 	 requirements
 	 predicates
-	 tasks
-	 methods
-	 actions
-	 #|mit ` und , vor den einzelnen Listen wird als key durch "assoc" nur bspw. (:requirements) verwendet; ohne die , wird der key (:requirements . requirements) richtig gefunden, requirements aber nicht als Liste erkannt; mit `und ' innerhalb der Paare läuft das Programm durch, gibt uns aber nur #S(HDDL-DOMAIN
-   :NAME (DOMAIN TRANSPORT)
-   :REQUIREMENTS NIL
-   :TYPES NIL
-   :PREDICATES NIL
-   :TASKS NIL
-   :METHODS NIL
-   :ACTIONS NIL)
-    aus |#
-	 (look-up `((:types . 'types)(:requirements . 'requirements) (:predicates . 'predicates) (:task . 'tasks) (:method . 'methods) (:action . 'actions))))
+	 tasks 
+	 methods 
+	 actions 
+	 (look-up '((:types . types) (:requirements . requirements) (:predicates . predicates) (:task . tasks) (:method . methods) (:action . actions))))
+    (declare (special types requirements predicates tasks methods actions));; lexikalische Deklaration der Variablen
     ;; for each element of the domain-list search for its first element in the look-up list and
     ;; push it to the corresponding list (second half of the pair)
     (dolist (element (cddr  read-domain))
       (let ((key (assoc (first element) look-up)))
 	(when key
-	  (push element (second key))))) ;; add elements of the domain to the appropriate lists
-
+	  ;;(pprint key) debugging
+	  (set (cdr key) (cons element (symbol-value (cdr key))))
+	  ;;(pprint (cdr key))))) add elements of the domain to the appropriate lists
+    
     ;; transform elements of the domain-lists into the appropriate structures
     (let ((hddl-tasks)
 	  (hddl-methods)
@@ -71,8 +65,8 @@ read-problem -> *goal-tasks*, *status*, *objects*
 	  (domain))
       ;;setq always returns the last binding
       (setq hddl-tasks
-	    (loop for (x name . parameters) in tasks collect
-		  ;;(declare (ignore x))
+	    (loop for (x name y . parameters) in tasks collect
+		  ;;(declare (ignore x y))
 		  (make-hddl-task :name name :parameters parameters))
 	   hddl-methods
 	    (loop for (x name y parameters z task w subtasks) in methods collect
@@ -117,18 +111,19 @@ read-problem -> *goal-tasks*, *status*, *objects*
 	 status
 	 problem
 	 ;; hier nochmal schauen, was wir wegen :htn :tasks zu machen ist!
-	 (look-up `((:objects . ,objects)(:tasks . ,tasks)(:ordering . ,ordering)(:constraints . ,constraints) (:status . ,status))))
+	 (look-up '((:objects . objects)(:tasks . tasks)(:ordering . ordering)(:constraints . constraints) (:status . status))))
+    (declare (special objects tasks ordering constraints status problem))
    (dolist (element (cdr read-problem))
      (let ((key (assoc (first element) look-up)))
        (when key
-	 (push element (second key)))))
+	  (set (cdr key) (cons element (symbol-value (cdr key)))))))
 
     ;; transform elements of the domain-lists into the appropriate structures
     (let (hddl-tasks)
     ;;objects noch machen: Schwierigkeit: Typen mit - müssen allen davorstehenden Objekten hinzugefügt werden
     (dolist (element tasks)
-      (destructuring-bind (x name . parameters) element
-	(declare (ignore x))
+      (destructuring-bind (x name y . parameters) element
+	(declare (ignore x y))
 	(push (make-hddl-task :name name :parameters parameters) hddl-tasks)))
 
     (setq problem (make-hddl-problem :name (second problem) :domain (third problem)
