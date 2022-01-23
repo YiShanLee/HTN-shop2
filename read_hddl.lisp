@@ -19,7 +19,7 @@ read-problem -> *goal-tasks*, *status*, *objects*
 ;; Strukturen für die einzelnen Elemente der Domäne/Problem + die Domäne/Problem selbst
 (defstruct hddl-predicate name parameters)
 (defstruct hddl-method name parameters task subtasks);;Achtung: Subtasks können auch ordered-subtasks heißen
-(defstruct hddl-action name parameters preconditions effects)
+(defstruct hddl-action name parameters preconditions neg-effects pos-effects)
 (defstruct hddl-domain name requirements types predicates tasks methods actions)
 (defstruct hddl-task name parameters)
 (defstruct hddl-object name type)
@@ -54,34 +54,60 @@ read-problem -> *goal-tasks*, *status*, *objects*
       (let ((key (assoc (first element) look-up)))
 	(when key
 	  ;;(pprint key) debugging
-	  (set (cdr key) (cons element (symbol-value (cdr key))))
+	  (set (cdr key) (cons element (symbol-value (cdr key)))))))
 	  ;;(pprint (cdr key))))) add elements of the domain to the appropriate lists
     
     ;; transform elements of the domain-lists into the appropriate structures
-    (let ((hddl-tasks)
+    (let ((hddl-requirements)
+	  (hddl-types)
+	  (hddl-tasks)
 	  (hddl-methods)
+	  (temp-actions)
 	  (hddl-actions)
 	  (hddl-predicates)
 	  (domain))
       ;;setq always returns the last binding
-      (setq hddl-tasks
-	    (loop for (x name y . parameters) in tasks collect
+      (setq hddl-requirements
+	    (cdr (car requirements))
+	    hddl-types
+	    (cdr (car types))
+	    hddl-tasks
+		(loop for (x name y . parameters) in tasks collect
 		  ;;(declare (ignore x y))
 		  (make-hddl-task :name name :parameters parameters))
 	   hddl-methods
 	    (loop for (x name y parameters z task w subtasks) in methods collect
 		  ;;(declare (ignore x y z w))
 		  (make-hddl-method :name name :parameters parameters :task task :subtasks subtasks))
-	   hddl-actions
-	     (loop for (x name y parameters z preconditions w effects) in actions collect
+      ;; separate effects into positive and negative effects before building hddl-actions:
+      temp-actions
+      (loop for action in actions collect
+	(let* ((new-action (butlast action));;keep everything but the effects of an action intact
+	      (effect (car (last action)));; mixed effects
+	      (pos-effects)
+	      (neg-effects))
+	(pprint effect);; debugging
+	      (if (equal (string (car effect)) "AND")
+		  (setq effect (cdr effect))) ;; remove the and from effects - unnecessary for future use
+	      (loop for e in effect do
+		(if (equal (string (car e)) "NOT")
+		    (push (cdr e) neg-effects)
+		    (push e pos-effects)))
+	  (pprint neg-effects)
+	  (pprint pos-effects)
+	  (setq new-action (append new-action neg-effects pos-effects))
+		new-action))
+		     
+	  hddl-actions
+	    (loop for (x name y parameters z preconditions w neg-effects pos-effects) in temp-actions collect
 		  ;;(declare (ignore x y z w))
-		  (make-hddl-action :name name :parameters parameters :preconditions preconditions :effects  effects))
+	   (make-hddl-action :name name :parameters parameters :preconditions preconditions :neg-effects  neg-effects :pos-effects pos-effects))
 	    hddl-predicates
 	    (loop for (name . parameters) in predicates collect
 			      	(make-hddl-predicate :name name :parameters parameters))
-	   domain (make-hddl-domain :name (second read-domain) :requirements requirements
-				      :types types :predicates hddl-predicates :tasks hddl-tasks
-				      :methods hddl-methods :actions hddl-actions)))))
+	   domain (make-hddl-domain :name (second read-domain) :requirements hddl-requirements
+				      :types hddl-types :predicates hddl-predicates :tasks hddl-tasks
+				    :methods hddl-methods :actions hddl-actions)))))
 			
 		
 ;; oder als defstruct :action -> Objekt
