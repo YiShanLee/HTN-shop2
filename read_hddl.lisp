@@ -1,9 +1,6 @@
 #|
 TODO:
-- typing:- (parameter of predicates) 
-         - parameter of tasks
-         - parameter of methods
-         - parameter of actions
+- typing-Problem bei objects ähnlich wie bei Types, keine Variablen mit ? sondern konkrete; wichtig!!!
 - make one big function to read both files such that type-list can be used for typing in both cases?
 - predicates funktioniert noch nicht ganz!
 
@@ -15,7 +12,7 @@ TODO:
 (defstruct hddl-method name parameters task subtasks);;Achtung: Subtasks können auch ordered-subtasks heißen
 (defstruct hddl-action name parameters preconditions neg-effects pos-effects)
 (defstruct hddl-domain name requirements types predicates tasks methods actions)
-(defstruct hddl-task name parameters)
+(defstruct hddl-task name parameters) 
 (defstruct hddl-object name type)
 (defstruct hddl-problem name domain objects tasks ordering constraints init-status)
 
@@ -72,12 +69,12 @@ TODO:
 	    (cdr (car types))
 	    
 	    hddl-tasks
-		(loop for (x name y . parameters) in tasks collect
-		     (make-hddl-task :name name :parameters parameters))
+	     (loop for (x name y . parameters) in tasks collect
+		     (make-hddl-task :name name :parameters (typing (car parameters))))
 		
 	   hddl-methods
 	    (loop for (x name y parameters z task w subtasks) in methods collect
-		 (make-hddl-method :name name :parameters parameters :task task :subtasks subtasks))
+		 (make-hddl-method :name name :parameters (typing parameters) :task task :subtasks subtasks))
 	    
       ;; separate effects into positive and negative effects before building hddl-actions:
       temp-actions
@@ -104,11 +101,11 @@ TODO:
 
       ;;use list with separated effects to build hddl-actions
 	  hddl-actions
-	  (loop for (x name y parameters z preconditions w neg-effects pos-effects) in temp-actions collect												    (make-hddl-action :name name :parameters parameters :preconditions preconditions :neg-effects  neg-effects :pos-effects pos-effects))
+	  (loop for (x name y parameters z preconditions w neg-effects pos-effects) in temp-actions collect												    (make-hddl-action :name name :parameters (typing parameters) :preconditions preconditions :neg-effects  neg-effects :pos-effects pos-effects))
 	    
 	    hddl-predicates
 	    (loop for (name . parameters) in (cdr (car predicates)) collect
-		  (make-hddl-predicate :name name :parameters parameters))
+		  (make-hddl-predicate :name name :parameters (typing parameters)))
 
 	    ;;finally combine everything into domain structure:
 	   domain (make-hddl-domain :name (second read-domain) :requirements hddl-requirements
