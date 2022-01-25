@@ -1,7 +1,9 @@
 #|
 TODO:
-- typing: find types in object-list, parameters etc. and save objects and their type to pairs 
-           for easy access; maybe even use type-list (at least for domain);use hddl-object for this as well
+- typing:- (parameter of predicates) 
+         - parameter of tasks
+         - parameter of methods
+         - parameter of actions
 - make one big function to read both files such that type-list can be used for typing in both cases?
 - predicates funktioniert noch nicht ganz!
 
@@ -105,7 +107,7 @@ TODO:
 	  (loop for (x name y parameters z preconditions w neg-effects pos-effects) in temp-actions collect												    (make-hddl-action :name name :parameters parameters :preconditions preconditions :neg-effects  neg-effects :pos-effects pos-effects))
 	    
 	    hddl-predicates
-	    (loop for (name . parameters) in predicates collect
+	    (loop for (name . parameters) in (cdr (car predicates)) collect
 		  (make-hddl-predicate :name name :parameters parameters))
 
 	    ;;finally combine everything into domain structure:
@@ -172,7 +174,20 @@ TODO:
 		   (make-hddl-task :name name :parameters parameters))
 	    problem (make-hddl-problem :name (second read-problem) :domain (cdr (third read-problem)) :objects (cdr (car objects)) :tasks hddl-tasks :ordering ordering :constraints constraints :init-status (cdr (car status))))))))
 
-
+;;takes list of variables and types and returns a list of pairs (variable . type)
+(defun typing (lst)
+  (let ((currentvariables)
+	(type)
+	(typedvariables))
+  (loop for x in lst do
+    (cond
+      ((equal (char (string x) 0) #\?) (push x currentvariables)) ;;variables start with "?"
+      ((equal (string x) "-") ());; do nothing -> "-" signals that next element is a type
+      (t (setq type x)
+	  (loop for v in currentvariables do
+	    (push (cons v type) typedvariables))
+	  (setq currentvariables nil))))
+    typedvariables))
 
 
 
