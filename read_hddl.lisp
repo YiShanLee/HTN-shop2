@@ -3,6 +3,7 @@ TODO:
 - typing: find types in object-list, parameters etc. and save objects and their type to pairs 
            for easy access; maybe even use type-list (at least for domain);use hddl-object for this as well
 - make one big function to read both files such that type-list can be used for typing in both cases?
+- predicates funktioniert noch nicht ganz!
 
 - find more elegant solution for htn-separation into tasks, ordering, constraints in read-hddl-problem
 |#
