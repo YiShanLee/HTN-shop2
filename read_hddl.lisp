@@ -1,9 +1,6 @@
 #|
 TODO:
-- typing-Problem bei objects ähnlich wie bei Types, keine Variablen mit ? sondern konkrete; wichtig!!!
 - make one big function to read both files such that type-list can be used for typing in both cases?
-- predicates funktioniert noch nicht ganz!
-
 - find more elegant solution for htn-separation into tasks, ordering, constraints in read-hddl-problem
 |#
 
@@ -49,9 +46,7 @@ TODO:
     (dolist (element (cddr  read-domain))
       (let ((key (assoc (first element) look-up)))
 	(when key
-	  ;;(pprint key) debugging
-	  (set (cdr key) (cons element (symbol-value (cdr key)))))))
-	  ;;(pprint (cdr key))))) add elements of the domain to the appropriate lists
+	  (set (cdr key) (cons element (symbol-value (cdr key))))))) ;;add elements of the domain to the appropriate lists
     
     ;; transform elements of the domain-lists into the appropriate structures
     (let ((hddl-requirements)
@@ -66,7 +61,7 @@ TODO:
       (setq hddl-requirements
 	    (cdr (car requirements)) ;;remove unneccessary key-word from beginning of list
 	    hddl-types
-	    (cdr (car types))
+	    (typing2 (cdr (car types)))
 	    
 	    hddl-tasks
 	     (loop for (x name y . parameters) in tasks collect
@@ -83,7 +78,6 @@ TODO:
 	      (effect (car (last action)));; mixed effects
 	      (pos-effects)
 	      (neg-effects))
-	  ;;(pprint effect);; debugging
 	  
 	  ;; remove the "and" from effects - unnecessary for future use
 	      (if (equal (string (car effect)) "AND")
@@ -94,8 +88,6 @@ TODO:
 		(if (equal (string (car e)) "NOT") 
 		    (push (cdr e) neg-effects)
 		    (push e pos-effects)))
-	  ;;(pprint neg-effects) ;;debugging
-	  ;;(pprint pos-effects) ;;debugging
 	  (setq new-action (append new-action neg-effects pos-effects))
 		new-action)) ;; collect the new actions
 
@@ -134,10 +126,8 @@ TODO:
        (when key
 	 (set (cdr key) (cons element (symbol-value (cdr key)))))))
     (setq htn (cdr (car htn)))
-    ;;(pprint htn) ;;debugging
-    ;;(pprint status) ;;debugging
 
-    ;;second iteration of separating file into components - separate htn into tasks, ordering,constraints; not using look-up-list-method, because the components are not separated into differnet lists already, e.g. a list with first element ":TASKS" and second element a list of tasks, but rather elements in the list beginning with ":HTN")
+;;second iteration of separating file into components - separate htn into tasks, ordering,constraints; not using look-up-list-method, because the components are not separated into differnet lists already, e.g. a list with first element ":TASKS" and second element a list of tasks, but rather elements in the list beginning with ":HTN")
     (let ((tasks)
 	  (ordering)
 	  (constraints))
@@ -151,28 +141,22 @@ TODO:
       (if (equal (string (car htn)) "CONSTRAINTS")
 	  (setq constraints (second htn)
 		htn (cddr htn)))
-      ;;(pprint tasks) ;;debugging 
-      ;;(pprint ordering) ;;debugging
-      ;;(pprint constraints) ;;debugging
-
+     
       ;;remove unnecessary "AND" from task-list:
       (if (equal (string (car tasks)) "AND")
 	  (setq tasks (cdr tasks))) 
-      ;;(pprint tasks) ;;debugging
-      ;;TODO: maybe find a better solution for htn-separation
-
+   
     ;; transform elements of the domain-lists into the appropriate structures
-    (let ((hddl-tasks)
+      (let ((hddl-tasks)
       (problem))
-    ;;TODO : objects; Schwierigkeit: Typen mit - müssen allen davorstehenden Objekten hinzugefügt werden
-      
       (setq hddl-tasks
 	    (loop for (name . parameters) in tasks collect
 		   (make-hddl-task :name name :parameters parameters))
-	    problem (make-hddl-problem :name (second read-problem) :domain (cdr (third read-problem)) :objects (cdr (car objects)) :tasks hddl-tasks :ordering ordering :constraints constraints :init-status (cdr (car status))))))))
+	    problem (make-hddl-problem :name (second read-problem) :domain (cdr (third read-problem)) :objects (typing (cdr (car objects))) :tasks hddl-tasks :ordering ordering :constraints constraints :init-status (cdr (car status))))))))
 
 ;;takes list of variables and types and returns a list of pairs (variable . type)
-(defun typing (lst)
+;;works only for variables beginning with "?"
+#|(defun typing (lst)
   (let ((currentvariables)
 	(type)
 	(typedvariables))
@@ -184,9 +168,30 @@ TODO:
 	  (loop for v in currentvariables do
 	    (push (cons v type) typedvariables))
 	  (setq currentvariables nil))))
-    typedvariables))
+    typedvariables))|#
 
-
-
-
-	     
+;;takes list of variables and types and returns a list of pairs (variable . type)
+;; works for all typing needs!
+(defun typing (lst)
+  (let* ((p 0) ;; start with 0 instead of -1 because we want to take the element after "-",too
+	(separateby))
+    (loop for x in lst do
+      (setq p (+ p 1))
+	  (if (equal "-" (string x))
+	      (push p separateby)))
+    (setq separateby (reverse separateby))
+    (let ((separate)
+	  (j 0)
+	  (typedvariables))
+      (loop for i in separateby do
+	(push (subseq lst j (+ i 1)) separate)
+	(setq j (+ 1 i))
+	(if (> j (- (length lst) 1))
+	    (setq j (- (length lst) 1))))
+      (loop for e in separate do
+	(let ((type (last e))
+	      (variables (reverse (cddr(reverse e)))))
+	  (loop for v in variables do
+	    (push (cons v type) typedvariables))))
+      typedvariables)))
+		   
