@@ -11,67 +11,111 @@
 ;;;; knowledge from input 
 ;; domain knowledge
 (defparameter *T* '()) ; tasks from the beginning input
-(defparameter *m* '()) ; methods from the domain knowledge
-(defparameter *a* '()) ; actions from the domain knowledge
+(defparameter *M* '()) ; methods from the domain knowledge
+(defparameter *A* '()) ; actions from the domain knowledge
 ;; problem 
-(defparameter *initial-state* '()) ; the beginning state of one problem
+(defparameter initial-state '()) ; the beginning state of one problem
 ;-----------------------------
 ;;;; global variables for the shop2-operator
 ;; initialized plan
 (defparameter *Plan* '())
 
 ;; list of actions 
-(defparameter *A* '())
+(defparameter *a* '())
 
 ;; t for task without constraint to precede t in T
-(defparameter *T0* '()) ; task constraint
+(defparameter T0 '()) ; task constraint
 ; (defparameter *unifier* '()) ;a association of variables that shows current state
 (defparameter *current-state* ()) ; the updated state from current position
 ;------------------------------------------------------------ 
-(defun shop2-operator(*initial-state*, *T*, domain)
-  (let ((*T0* constraint(*T*)) (current-task (car *T0*)) (substitution nil))
-    (loop 
-      (cond ((null *T*)(return *Plan*))
-            ((taskp current-task) ; the same as current-task
-             ; do, if primitive
-             (do ((actions *actions* (cdr actions))
-                  (*Actions* nil (cond ((and (not (eq (find (car actions) domain-actions nil)) 
-                                             (not (eq (find (car actions) (*current-state*))) nil))) (setq *Actions* (cons unifier((car actions) current-task) *Actions*)))
-                                       (t *Actions*)))
-                )
-                  ((null actions) (cond ((eq *Actions* nil) ((return fail-handling) (print "there is no desired actions")))
-                                        (t (do ((act *Actions* (cdr act))
-                                                (state *current-state* modify(act))
-                                                (*Plan* *Plan* (cons (car act) *Plan*))
-                                                (*T* *T* (setq *T* (remove current-task *T*)))
-                                                (substitution substitution (substitute (cdr act)))) ; (variable initial-value modify-value)
-                                               ((null act) *Plan*)))))))
-            ; compound tasks
-            (t ())
-            )
-        
-        (setq *T0* (cdr *T0*))
-        (setq current-task (car *T0*))
-      )      
-    ))
+
+(defun shop2-operator(initial-state Tsk domain)
+  (let ((T0 constraint(Tsk)) (substitution nil) (Plan) (current-state) (Task *T*))
+      (setq current-task (car T0))
+      (loop 
+        (cond ((null Task)(return Plan))
+              ((hddl-action-name-p current-task) ; 
+               ; do, if primitive
+               (do ((actions *A* (cdr actions)) ; actions from domain knowledge *A*
+                    (Actions-lst nil (cond ((satisfyp((car actions) current-task)) 
+                                          (setq Actions-lst (push unifier((car actions) current-task) Actions-lst)))
+                                         (t Actions-lst)))
+                  )
+                    ((null actions) Actions-lst) ; return actions-lst for debug ; 
+                      (cond ((eq Actions-lst nil) ((return fail-handling) (print "there is no desired actions")))
+                                       ; (t (let ((act (car Action-lst)))   
+                                         (t (do ((act Actions-lst (cdr act))
+                                                  (state current-state modify(act)) ; TODO 
+                                                  (Plan Plan (push (car act) Plan))
+                                                  (Task Task (setq Task (remove current-task Task))) ;TODO
+                                                  (substitution substitution (substitute (cdr act)))) ; (variable initial-value modify-value)
+                                                 ((null act) Plan)))
+                                         )))
+              ; compound tasks
+              (t 
+                 (do ((mthds *m* (cdr methds)) ;; methods from domain as local variables 
+            ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
+            ; pre(m) is true in s, and m and θ are as general as possible}
+                      (Methods-lst nil (cond ((satisfyp ((car mthds) current-task))
+                                            (setq Methods-lst (push unifier((car mthds) current-task) Methods-lst)))
+                                            (t Methods-lst)))) ; if not fulfill the conditions, return Methods-list to restore current history.
+                      )
+                     ((null mthds) Methods-lst) ; return *Methods* to debug 
+                     ; another return value
+                       ; if M = empty then return failure
+                     (cond ((eq Methods-lst nil)((return fail-handling) (print "there is no desired methods")))
+                  ; nondeterministically choose a pair (m, θ) ∈ M
+              (t (do ((ms Methods-lst (cdr ms))
+                          ; modify T by removing t, adding sub(m), constraining each task
+                                  (Tsk Tsk (remove current-task Tsk))
+                                   ; in sub(m) to precede the tasks that t preceded
+                                    (subm (hddl-method-subtasks (car ms)))
+                                   ;, and applying θ 
+                                    (substitution substitution (substitute (cdr ms)))) ; variable initial-value modify-value
+                                   ((null ms)  ) ; TODO return handle
+                                   ; if sub(m) is not empty then T0 ← {t ∈ sub(m) : no task in T is constrained to precede t}
+                                   (cond ((subm) (push subm T0))
+                                         (t (return nil))))
+                          )
+                                       )
+              )
+          )
+          (setq T0 (cdr T0))
+          (setq current-task (car T0))
+        )      
+    )
 ; constraint T to T0
 (defun constraint (tasks)
-  (return lis))
+  (return tasks))
+
+;; satisfy check 
+; parameters (action), (*current-state*)
+; check the precondition of one action suits current-state
+; A ← {(a, θ) : a is a ground instance of an operator in D, θ is a substitution that unifies {head(a), t von problem}, and (s von problem) satisfies a’s preconditions}
+(defun satisfyp (act tsk)
+  (cond (()())
+    (t (return nil)))
+  )
+  
+;; content check
+(defun contentp (act tsk)
+  (let (()))
+  )
+  
 ; unfiier 
 ; if task exist in actions then union and return true
 ; TODO
-; theta ausgibt sowie (a, theta)
-(defun unifier (action task)
-  ()
-  )
+; two parameters check
+; (defun unifier (act tsk)
+;   )
 
-; substitution 
-(defun substitute (theta)
-  )
+; ; substitution 
+; (defun substitute (theta)
+;   )
 
-; modify action
-(defun modify (action)
-  )
+; ; modify action
+; (defun modify (action)
+  ; )
 ;-------------------------------------------------------------
 ;;; illustration from thesis
 #|
@@ -96,9 +140,5 @@ before generating any other subtasks in the task network
 |#
 ;-------------------------------------------------------------
 
-
-
-
-  
 
 
