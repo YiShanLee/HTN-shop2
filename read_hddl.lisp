@@ -4,6 +4,10 @@ TODO:
 - find more elegant solution for htn-separation into tasks, ordering, constraints in read-hddl-problem
 |#
 
+;;define global variables
+(defparameter *domain* (make-hash-table))
+(defparameter *problem* (make-hash-table))
+
 ;; structures for the elements of a hddl-domain or hddl-problem and for the problem and domain as a whole
 (defstruct hddl-predicate name parameters)
 (defstruct hddl-method name parameters task subtasks);;Achtung: Subtasks können auch ordered-subtasks heißen
@@ -102,7 +106,8 @@ TODO:
 	    ;;finally combine everything into domain structure:
 	   domain (make-hddl-domain :name (second read-domain) :requirements hddl-requirements
 		    :types hddl-types :predicates hddl-predicates :tasks hddl-tasks
-				    :methods hddl-methods :actions hddl-actions)))))
+				    :methods hddl-methods :actions hddl-actions))
+      (setq *domain* domain))))
 			
 	       
 		       
@@ -152,12 +157,14 @@ TODO:
       (setq hddl-tasks
 	    (loop for (name . parameters) in tasks collect
 		   (make-hddl-task :name name :parameters parameters))
-	    problem (make-hddl-problem :name (second read-problem) :domain (cdr (third read-problem)) :objects (typing (cdr (car objects))) :tasks hddl-tasks :ordering ordering :constraints constraints :init-status (cdr (car status))))))))
+	    problem (make-hddl-problem :name (second read-problem) :domain (cdr (third read-problem)) :objects (typing (cdr (car objects))) :tasks hddl-tasks :ordering ordering :constraints constraints :init-status (cdr (car status)))))
+    (setq *domain* domain))))
+    
 
 ;;takes list of variables and types and returns a list of pairs (variable . type)
 ;;works only for variables beginning with "?"
 #|(defun typing (lst)
-  (let ((currentvariables)
+(setq *domain* domain))  (let ((currentvariables)
 	(type)
 	(typedvariables))
   (loop for x in lst do
