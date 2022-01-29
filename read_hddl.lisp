@@ -1,7 +1,6 @@
 #|
 TODO:
-- make one big function to read both files such that type-list can be used for typing in both cases?
-- find more elegant solution for htn-separation into tasks, ordering, constraints in read-hddl-problem
+- Sonderfall ordered-subtasks!
 |#
 
 ;;define global variables
@@ -65,7 +64,7 @@ TODO:
       (setq hddl-requirements
 	    (cdr (car requirements)) ;;remove unneccessary key-word from beginning of list
 	    hddl-types
-	    (typing2 (cdr (car types)))
+	    (typing (cdr (car types)))
 	    
 	    hddl-tasks
 	     (loop for (x name y . parameters) in tasks collect
@@ -101,13 +100,23 @@ TODO:
 	    
 	    hddl-predicates
 	    (loop for (name . parameters) in (cdr (car predicates)) collect
-		  (make-hddl-predicate :name name :parameters (typing parameters)))
+								    (make-hddl-predicate :name name :parameters (typing parameters))))
+      (loop for method in hddl-methods do
+	(let ((subtasks (hddl-method-subtasks method))
+	      (new-subtasks))
+	 (if (equal (string (car subtasks)) "AND")
+	     (setq subtasks (cdr subtasks)))
+	  (setq new-subtasks (loop for (name . parameters) in subtasks collect
+				   (make-hddl-task :name name :parameters parameters)))
+				   
+	  (pprint new-subtasks)
+	  (setf (hddl-method-subtasks method) new-subtasks)))
 
 	    ;;finally combine everything into domain structure:
-	   domain (make-hddl-domain :name (second read-domain) :requirements hddl-requirements
+	   (setq domain (make-hddl-domain :name (second read-domain) :requirements hddl-requirements
 		    :types hddl-types :predicates hddl-predicates :tasks hddl-tasks
-				    :methods hddl-methods :actions hddl-actions))
-      (setq *domain* domain))))
+					  :methods hddl-methods :actions hddl-actions))
+	   *domain* domain))))
 			
 	       
 		       
@@ -157,8 +166,8 @@ TODO:
       (setq hddl-tasks
 	    (loop for (name . parameters) in tasks collect
 		   (make-hddl-task :name name :parameters parameters))
-	    problem (make-hddl-problem :name (second read-problem) :domain (cdr (third read-problem)) :objects (typing (cdr (car objects))) :tasks hddl-tasks :ordering ordering :constraints constraints :init-status (cdr (car status)))))
-    (setq *domain* domain))))
+	    problem (make-hddl-problem :name (second read-problem) :domain (cdr (third read-problem)) :objects (typing (cdr (car objects))) :tasks hddl-tasks :ordering ordering :constraints constraints :init-status (cdr (car status))))
+    (setq *problem* problem)))))
     
 
 ;;takes list of variables and types and returns a list of pairs (variable . type)
