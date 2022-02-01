@@ -30,24 +30,36 @@
 ;------------------------------------------------------------ 
 
 (defun shop2-operator(initial-state Tsk domain)
-  (let ((T0 constraint(Tsk)) (substitution nil) (Plan) (current-state) (Task *T*))
+;; Alisa: am besten wäre es wahrscheinlich, wenn wir in diesem let das Einlesen von Domain und Code 
+;; mit einbinden, also (*domain* (read-hddl-domain "domain-file")) (*problem* (read-hddl-problem "problem-file"))
+;; dann sollten wir die Funktion vielleicht so aufrufen lassen:  (defun shop2-operator(domain-file problem-file) und alles
+;; weitere wie initial-state und so weiter dann erst rausziehen, oder? Also das man zum Aufrufen wirklich nur (shop2-operator ("domain.hddl" "problem.hddl")) eintippen muss
+;; dann wäre es (let ((*domain* (read-hddl-domain "domain-file")) (*problem* (read-hddl-problem "problem-file"))
+;; 					 (Tsk (hddl-problem-task *problem*)) (initial-state (hddl-problem-init problem)) und dann alles, was du jetzt schon hast)
+ (let ((T0 constraint(Tsk)) (substitution nil) (Plan) (current-state) (Task *T*)) ;;Alisa: Ist Task und Tsk hier dann nicht das gleiche?
       (setq current-task (car T0))
+	  ;; Alisa: hier vielleicht auch noch für jede Task eine constraint-list anhängen, 
+	  ;; die erstmal leer ist, und später bei Methoden-Aufrufen durch Subtasks gefüllt wird, 
+	  ;; wenn es constraints gibt? Dann müssten wir für T0 auch immer nur prüfen, ob die constraint-Listen leer sind
       (loop 
         (cond ((null Task)(return Plan))
-              ((hddl-action-name-p current-task) ; 
+              ((hddl-action-name-p current-task) ;; Alisa: hier dann auch current-task-name! 
                ; do, if primitive
                (do ((actions *A* (cdr actions)) ; actions from domain knowledge *A*
+					;; Alisa: ich glaube, hier wäre es sinnvoller, erst zu schauen, welche actions unifien 
+					;;(also den selben Namen wie die task haben, die selben Parameter brauchen und dann die Parameter als theta zu speichern)
+					;; und danach erst, ob die preconditions erfüllt sind, weil wir dann nur noch viel weniger actions durchgehen müssen!
                     (Actions-lst nil (cond ((satisfyp((car actions) current-task)) 
                                           (setq Actions-lst (push unifier((car actions) current-task) Actions-lst)))
                                          (t Actions-lst)))
                   )
                     ((null actions) Actions-lst) ; return actions-lst for debug ; 
-                      (cond ((eq Actions-lst nil) ((return fail-handling) (print "there is no desired actions")))
-                                       ; (t (let ((act (car Action-lst)))   
-                                         (t (do ((act Actions-lst (cdr act))
-                                                  (state current-state modify(act)) ; TODO 
+                      (cond ((eq Actions-lst nil) ((return fail-handling) (print "there is no desired action")))
+                                       ; (t (let ((act (car Action-lst)))   ;; Alisa: wir würden hier ja wie bei T0 einfach erstmal "nondeterministically" die erste Aktion auswählen
+                                         (t (do ((act Actions-lst (cdr act)) ;; Alisa: fehlt hier danach ein setq?
+                                                  (state current-state modify(act)) ; TODO ;; Alisa: ich habe unten mal eine Funktion dafür angefangen
                                                   (Plan Plan (push (car act) Plan))
-                                                  (Task Task (setq Task (remove current-task Task))) ;TODO
+                                                  (Task Task (setq Task (remove current-task Task))) ;TODO ;;Alisa: zusätzlich müssten wir dann auch schauen, dass wir die task aus allen task constraint-Listen löschen!
                                                   (substitution substitution (substitute (cdr act)))) ; (variable initial-value modify-value)
                                                  ((null act) Plan)))
                                          )))
@@ -84,7 +96,11 @@
           (setq current-task (car T0))
         )      
     )
-; constraint T to T0
+; constraint T to T0 
+;; Alisa: muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
+;; ich würde in die Struktur von t ein Element "constraints" einbauen, dann können wir dort immer speichern,
+;; welche tasks vorher ausgeführt werden müssen, und müssten hier nur prüfen, ob die constraints leer sind oder nicht
+;; dann müssen wir bei den Methoden dran denken, dass die constraints bei den Subtasks eingefügt werden müssen
 (defun constraint (tasks)
   (return tasks))
 
@@ -101,7 +117,15 @@
 (defun contentp (act tsk)
   (let (()))
   )
-  
+ 
+;;Alisa: unifier sollte am besten 
+;;1. alle actionen sammeln, die den gleichen Namen haben wie die task
+;;2. prüfen, ob die gleiche Anzahl Parameter vorliegt (Länge der Liste)
+;;3. prüfen, ob die Parameter den selben Typ haben (Reihenfolge in Parameterliste egal)
+;;4. die Parameter der task als theta ausgeben
+;; Ergebnis wäre dann eine Liste mit ((action . theta)(action . theta)...)
+;; hier würde ich also auch gar nicht jede action einzeln übergeben, sondern gleich alle auf einmal
+
 ; unfiier 
 ; if task exist in actions then union and return true
 ; TODO
@@ -113,6 +137,24 @@
 ; (defun substitute (theta)
 ;   )
 
+;; Alisa: hier würde ich denke ich (defun modify (status action) schreiben, damit wir den aktuellen
+;; Status auch mitübergeben, den wir dann verändern
+;; dafür würde ich 
+;; 1. durch die current-status-Liste iterieren und für alle negativen Effekte der Aktion herauslöschen
+;; 2. alle positiven Effekte der Aktion hinzufügen, und das als neuen Status ausgeben lassen:
+#| (defun modify-status (status action)
+		(let ((addeffect (hddl-action-poseffect action))
+			   (deleffect (hddl-action-negeffect action))
+			   (new-status))
+		 (loop for e in status do
+			(if deleffects does not contain e, 
+				push it to new-status
+				else do nothing)
+		)
+		(cons new-status addeffect)
+		new-status
+	)
+	|#
 ; ; modify action
 ; (defun modify (action)
   ; )
