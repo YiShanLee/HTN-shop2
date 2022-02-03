@@ -90,7 +90,7 @@ TODO:
 	      (loop for e in effect do
 		(if (equal (string (car e)) "NOT") 
 		    (push (cdr e) neg-effects)
-		    (push e pos-effects)))
+		    (push (list e) pos-effects)))
 	  (setq new-action (append new-action neg-effects pos-effects))
 		new-action)) ;; collect the new actions
 
