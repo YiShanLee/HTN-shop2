@@ -109,15 +109,17 @@
 	      (ordered nil))
 	 (if (equal (string (car subtasks)) "AND")
 	     (setq subtasks (cdr subtasks)))
-	  (if (not (null (hddl-method-ordered-subtasks method)) ;; set ordered to true if the ordered-subtasks slot of the method is not nil -> the subtasks are ordered
-	      (setq ordered t)))
+	  (if (not (null (hddl-method-ordered-subtasks method))) ;; set ordered to true if the ordered-subtasks slot of the method is not nil -> the subtasks are ordered
+	      (setq ordered t))
 	  (setq new-subtasks (loop for (name . parameters) in subtasks collect
 								       (make-hddl-task :name name :parameters parameters :constraints nil)))
 	  ;;if the subtasks are ordered, add the names of all subtasks that need to be acted out first to the constraints of all others
-	  (if (ordered)
-	      (loop for subtask in new-subtasks do
-
-		))
+	  (if ordered
+	      (loop for subs on new-subtasks do 
+			(setf (hddl-task-constraints (car subs)) 
+				(loop for sub in (cdr subs) collect
+					(hddl-task-name sub)))))
+			
 	  (setf (hddl-method-subtasks method) new-subtasks)))
 
 	    ;;finally combine everything into domain structure:
