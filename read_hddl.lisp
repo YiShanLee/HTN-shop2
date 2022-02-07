@@ -1,7 +1,3 @@
-#|
-TODO:
-- Sonderfall ordered-subtasks!
-|#
 
 ;;define global variables
 (defparameter *domain* (make-hash-table))
@@ -9,10 +5,10 @@ TODO:
 
 ;; structures for the elements of a hddl-domain or hddl-problem and for the problem and domain as a whole
 (defstruct hddl-predicate name parameters)
-(defstruct hddl-method name parameters task subtasks);;Achtung: Subtasks können auch ordered-subtasks heißen
+(defstruct hddl-method name parameters task subtasks ordered-subtasks);;Achtung: Subtasks können auch ordered-subtasks heißen
 (defstruct hddl-action name parameters preconditions neg-effects pos-effects)
 (defstruct hddl-domain name requirements types predicates tasks methods actions)
-(defstruct hddl-task name parameters) 
+(defstruct hddl-task name parameters constraints)  
 (defstruct hddl-object name type)
 (defstruct hddl-problem name domain objects tasks ordering constraints init-status)
 
@@ -68,11 +64,17 @@ TODO:
 	    
 	    hddl-tasks
 	     (loop for (x name y . parameters) in tasks collect
-		     (make-hddl-task :name name :parameters (typing (car parameters))))
+		     (make-hddl-task :name name :parameters (typing (car parameters)) :constraints nil))
 		
-	   hddl-methods
-	    (loop for (x name y parameters z task w subtasks) in methods collect
-		 (make-hddl-method :name name :parameters (typing parameters) :task task :subtasks subtasks))
+	  hddl-methods
+	    (let ((pushmethods)
+		  (ordered))
+	      (loop for (x name y parameters z task w subtasks) in methods do
+			     (if (search "ORDERED" (string w))
+				(setq ordered t)
+			        (setq ordered nil))
+			     (push (make-hddl-method :name name :parameters (typing parameters) :task task :subtasks subtasks :ordered-subtasks ordered) pushmethods))
+		  (reverse pushmethods))
 	    
       ;; separate effects into positive and negative effects before building hddl-actions:
       temp-actions
@@ -103,20 +105,26 @@ TODO:
 								    (make-hddl-predicate :name name :parameters (typing parameters))))
       (loop for method in hddl-methods do
 	(let ((subtasks (hddl-method-subtasks method))
-	      (new-subtasks))
+	      (new-subtasks)
+	      (ordered nil))
 	 (if (equal (string (car subtasks)) "AND")
 	     (setq subtasks (cdr subtasks)))
+	  (if (not (null (hddl-method-ordered-subtasks method)) ;; set ordered to true if the ordered-subtasks slot of the method is not nil -> the subtasks are ordered
+	      (setq ordered t)))
 	  (setq new-subtasks (loop for (name . parameters) in subtasks collect
-				   (make-hddl-task :name name :parameters parameters)))
-				   
-	  (pprint new-subtasks)
+								       (make-hddl-task :name name :parameters parameters :constraints nil)))
+	  ;;if the subtasks are ordered, add the names of all subtasks that need to be acted out first to the constraints of all others
+	  (if (ordered)
+	      (loop for subtask in new-subtasks do
+
+		))
 	  (setf (hddl-method-subtasks method) new-subtasks)))
 
 	    ;;finally combine everything into domain structure:
 	   (setq domain (make-hddl-domain :name (second read-domain) :requirements hddl-requirements
 		    :types hddl-types :predicates hddl-predicates :tasks hddl-tasks
 					  :methods hddl-methods :actions hddl-actions))
-	   *domain* domain))))
+	   *domain* domain)))
 			
 	       
 		       
@@ -165,7 +173,7 @@ TODO:
       (problem))
       (setq hddl-tasks
 	    (loop for (name . parameters) in tasks collect
-		   (make-hddl-task :name name :parameters parameters))
+		   (make-hddl-task :name name :parameters parameters :constraints nil))
 	    problem (make-hddl-problem :name (second read-problem) :domain (cdr (third read-problem)) :objects (typing (cdr (car objects))) :tasks hddl-tasks :ordering ordering :constraints constraints :init-status (cdr (car status))))
     (setq *problem* problem)))))
     
