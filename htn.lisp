@@ -41,23 +41,13 @@
     ;; die erstmal leer ist, und später bei Methoden-Aufrufen durch Subtasks gefüllt wird, 
     ;; wenn es constraints gibt? Dann müssten wir für T0 auch immer nur prüfen, ob die constraint-Listen leer sind
       (loop 
-        (if ((null Tasks)(return Plan)))
+        (if (null Tasks)(return Plan))
         (setq current-task (car T0))
-           (cond ((hddl-action-name-p current-task-name) ;; Alisa: hier dann auch current-task-name! 
-               ; do, if primitive
-               (do ((actions *A* (cdr actions)) ; actions from domain knowledge *A*
-          ;; Alisa: ich glaube, hier wäre es sinnvoller, erst zu schauen, welche actions unifien 
-          ;;(also den selben Namen wie die task haben, die selben Parameter brauchen und dann die Parameter als theta zu speichern)
-          ;; und danach erst, ob die preconditions erfüllt sind, weil wir dann nur noch viel weniger actions durchgehen müssen!
-                    (actions-lst nil (cond ((satisfyp(actions current-task)) ;; Alisa: für satisfyp würde ich dann die Liste aller actions übergeben, die beim unifier rauskamen
-                                          (setq Actions-lst (push unifier((car actions) current-task) Actions-lst)))
-                                         (t Actions-lst)))
-                  )
-                    ((null actions) Actions-lst)) ; return actions-lst for debug ; 
-                      (cond ((eq Actions-lst nil) ((return fail-handling) (print "there is no desired action")))
-                                       ; (t (let ((act (car Action-lst)))   ;; Alisa: wir würden hier ja wie bei T0 einfach erstmal "nondeterministically" die erste Aktion auswählen
-                                         (t ((let ((act (car Action-lst))) ;; Alisa: fehlt hier danach ein setq?
-                                                  (setq current-state modify-status(current-state act)) ; TODO ;; Alisa: ich habe unten mal eine Funktion dafür angefangen
+           (cond ((hddl-action-name-p (hddl-task-name current-task) ) ;; Alisa: hier dann auch current-task-name! 
+                (let ((Actions-lst) (unify (*A* current-task)))
+                      (cond ((eq Actions-lst nil) (error (make-condition 'failure-handling :actual-input 'action)))
+                                         (t ((let ((act (car Action-lst))) 
+                                                  (setq current-state modify-status(current-state act)) 
                                                   (push (car act) Plan)
                                                   (setq Tasks (remove current-task Tasks)) ;TODO function ;;Alisa: zusätzlich müssten wir dann auch schauen, dass wir die task aus allen task constraint-Listen löschen!
                                                   (substitute (action current-task))) ; (variable initial-value modify-value)
@@ -66,40 +56,28 @@
                       (setq T0 constraint(Tasks))) ; 
               ; compound tasks
               (t 
-                 (do ((mthds *m* (cdr methds)) ;; methods from domain as local variables 
-            ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
-            ; pre(m) is true in s, and m and θ are as general as possible}
-      
-      ;; Alisa: auch hier würde ich erst die Zeile mit unifier und danach mit satisfyp ausführen
-                      (Methods-lst nil (cond ((satisfyp ((car mthds) current-task))
-                                            (setq Methods-lst (push unifier((car mthds) current-task) Methods-lst)))
-                                            (t Methods-lst)))) ; if not fulfill the conditions, return Methods-list to restore current history.
-                      )
-                     ((null mthds) Methods-lst) ; return *Methods* to debug 
-                     ; another return value
+                  (let (Methods-lst (unify-m (*M* current-task current-state))) ;; methods from domain as local variables
                        ; if M = empty then return failure
-                     (cond ((eq Methods-lst nil)((return fail-handling) (print "there is no desired methods")))
+                     (cond ((eq Methods-lst nil)(error (make-condition 'failure-handling :actual-input 'method)))
                   ; nondeterministically choose a pair (m, θ) ∈ M
-    ;; Alisa: ; (t (let ((ms (car Methods-lst))) 
-              (t (do ((ms Methods-lst (cdr ms))
+                               (t (let ((ms Methods-lst (car ms))
                           ; modify T by removing t, adding sub(m), constraining each task
-                                  (Tsk Tsk (remove current-task Tsk))
+                                        (remove current-task Tasks))
                                    ; in sub(m) to precede the tasks that t preceded
-                                    (subm (hddl-method-subtasks (car ms)))
-                  ;; Alisa: hier müssen wir noch die Subtasks zu Tsk hinzufügen und dort 
+                                        (subm (hddl-method-subtasks (car ms)))
+                  ;; TODO Alisa: hier müssen wir noch die Subtasks zu Tsk hinzufügen und dort 
                   ;; gegebenenfalls in die constraint-Listen der tasks! (überall wo current-task rausgelöscht wird, neue subtasks einfügen)
-                                   ;, and applying θ 
+                                    ;, and applying θ 
                                     (substitution substitution (substitute (cdr ms)))) ; variable initial-value modify-value
-                                   ((null ms)  ) ; TODO return handle
                                    ; if sub(m) is not empty then T0 ← {t ∈ sub(m) : no task in T is constrained to precede t}
-                                   (cond ((subm) (setq T0 constraint(subm))) ;; Alisa: hier müssen wir T0 ganz neu erstellen, aus nur den Subtasks, die keine constraints haben
-                                         (t  (setq T0 constraint(Tasks))))) ;; Alisa ansonsten müssen wir T0 wieder wie oben erstellen, also aus nur den tasks in Tsk, die keine constraints haben
-                          )
-                                       )
+                                   (cond ((subm) (setq T0 constraint(subm))) 
+                                         (t  (setq T0 constraint(Tasks))))) 
+                                       ))
               )
           )
         )      
-    )
+    ))
+ )
 ; constraint T to T0 
 ;; Alisa: muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
 ;; ich würde ganz am Anfang des Codes für jede task in Tsk eine leere Liste erstellen, die die constraints enthält,
@@ -113,9 +91,6 @@
       (cons task t0)))
       t0))
 
-(defun constraint (tasks)
-  (return tasks))
-
 ;; satisfy check 
 ; parameters (action), (*current-state*)
 ; check the precondition of one action suits current-state
@@ -123,7 +98,7 @@
 
 ;; Alisa: für alle eingegebenen Aktionen prüfe, ob die preconditions einer Aktion im aktuellen Status erfüllt sind, falls ja, füge sie in Ergebnisliste ein
 ;; preconditions sind dann erfüllt, wenn sie im aktuellen Status enthalten sind
-;; gibt es auch negative preconditions?
+;; gibt es auch negative preconditions? nein
   (defun satisfyp2(actions current-status)
     (let ((satisfying_actions))  
       (loop for a in actions do
@@ -137,16 +112,7 @@
   (reverse satisfying_actions))))   
 
 
-
-(defun satisfyp (act tsk)
-  (cond (()())
-    (t (return nil)))
-  )
-  
-;; content check
-(defun contentp (act tsk)
-  (let (()))
-  )
+;---------------------------------------------------------------------
  
 ;;Alisa: unifier sollte am besten 
 ;;1. alle actionen sammeln, die den gleichen Namen haben wie die task
@@ -164,7 +130,7 @@
   (taskparam-types (loop for p in taskparams collect
                (cdr p))))
     ;; first for all actions collect only those that have the same name & amount of parameters as the task
-    (loop for a in actions do
+    (loop for a in satisfyp2(actions) do
       (let ((a-params (hddl-action-parameters a)))
   (if (eq (hddl-action-name action) taskname)
       (if (eq (length taskparams) (length a-params)) ;; then compare types
@@ -183,16 +149,41 @@
        (push (cons a taskparams) unified_actions))))
    (reverse unified_actions)))
 
+ ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
+            ; pre(m) is true in s, and m and θ are as general as possible}
+      ;; Alisa: auch hier würde ich erst die Zeile mit unifier und danach mit satisfyp ausführen
+;; satisfyp-m 
+; return a list of methods to filter the precondition of methods fitting the current-state
+(defun satisfyp-m (m state)
+  (let ((satisfied-m nil))
+    (loop
+      (cond ((null m) (return satisfied-m))
+          ((not (null (find ((hddl-method-subtasks (car m)) state)))) (setq satisfied-m (push (car m) satisfied-m))))
+      (setq m (cdr m))
+    )))
 
-
-
-; unfiier 
-; if task exist in actions then union and return true
-; TODO
-; two parameters check
-; (defun unifier (act tsk)
-;   )
-
+;; unify-m 
+; prueft, ob die Laenge der Parameters gleich
+; prueft, ob Typen der Parameters gleich
+; return a unified list such as {(m . theta)...}      
+(defun unify-m (methods task state)
+  (let ((m (satisfyp-m (methods state)))
+        (task-name (hddl-task-name task))
+        (taskparams (hddl-task-parameters task))
+        (taskparam-types (cadr (apply #'mapcar #'list (hddl-task-parameters task))))
+        (taskparam (car (apply #'mapcar #'list (hddl-task-parameters task))))
+        (Methods-lst nil)
+        )
+    (loop
+      (cond ((and (eq (length taskparams) (length (hddl-method-parameters (car m))))
+                 (equalp (taskparam-types) (cadr (apply #'mapcar #'list (hddl-method-parameters (car m))))))
+            (setq Methods-lst (push (cons (car m) (car (apply #'mapcar #'list (hddl-method-parameters (car m))))) Methods-lst)))
+            ((null m) (return Methods-lst))
+            )
+      (setq m (cdr m))
+    )
+  )
+)
 ; ; substitution 
 ; (defun substitute (theta)
 ;   )
@@ -212,11 +203,16 @@
       (cons new-status addeffect)
       new-status))
        
-; ; modify action
-; (defun modify (action)
-  ; )
+
   
 ;; failure handling
+(define-condition failure-handling (err)
+  ((actual-input :initarg :actual-input
+                 :reader actual-input
+                 :initform nil))
+  (:report (lambda (condition stream)
+             (format stream "~a is null!"
+                     (actual-input condition)))))
 ;-------------------------------------------------------------
 ;;; illustration from thesis
 #|
@@ -226,17 +222,17 @@ In this case, SHOP2 finds an action a that matches t and whose preconditions are
 (if no such action exists, then this branch of the search space fails).
 
 The second case is where t is compound, \
-i.e., a method needs to be applied tottodecompose it into subtasks. 
-In this case, SHOP2 nondeterministically chooses a methodinstancemthat will decompose t into subtasks 
-(if no such method instance exists, then thisbranch of the search space fails).
+i.e., a method needs to be applied to t to decompose it into subtasks. 
+In this case, SHOP2 nondeterministically chooses a method instance m that will decompose t into subtasks 
+(if no such method instance exists, then this branch of the search space fails).
 
 If there is a solution plan that involves m, then the actions in P will be the leaf nodes of a decomposition tree D P 
 such as the tree shown in Figure 2. The precondition formula pre(m) must be true in the state that 
-immediately precedes the first actionainDPthat isa descendant of m. 
+immediately precedes the first action a in D P that is a descendant of m. 
 In order to ensure that pre(m) is true in the correct state, SHOP2 needs to generate the 
 leftmost branch of D all the way down to the bottom, and evaluate pre(m)in the state just before a. 
 The last three lines of the loop ensure that this will happen, 
-by telling SHOP2 that if the current methodmhas any subtasks, SHOP2 should generate one of those subtasks 
+by telling SHOP2 that if the current method m has any subtasks, SHOP2 should generate one of those subtasks 
 before generating any other subtasks in the task network
 |#
 ;-------------------------------------------------------------
