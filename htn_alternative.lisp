@@ -41,7 +41,7 @@
 		     ;;nondeterministically choose a pair (a, θ) ∈ A
 		     (t ((let ((act (car Action-lst)))
 			   (setq current-state modify-status(current-state act)) ;;modify s by deleting del(a) and adding add(a)
-			   (push (car act) Plan) ;;append a to P  - mit oder ohne theta?
+			   (push act Plan) ;;append a to P  ;TODO: mit oder ohne theta?
 			    ;; modify T by removing t and applying θ
 			   (setq Tasks (remove-for-all-tasks current-task Tasks)) ;TODO function zusätzlich müssten wir dann auch schauen, dass wir die task aus allen task constraint-Listen löschen!
 			   (substitute ((cdr act) Tasks)))))) ;TODO: write function substitute!
@@ -52,12 +52,9 @@
               ; compound tasks
             (t
 	     ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
-            ; pre(m) is true in s, and m and θ are as general as possible}  ;;TODO: how to make it as general as possible?
-               (let* ((unifying_methods (method-unifier methods current-task)) ;;TODO: write method-unifier or check if action-unifier can encompass both!
-		      (Method-lst (method-satisfyp unifying_actions current-state))) ;;TODO: write method-satisfyp  
-            
-                     ((null mthds) Methods-lst) ; return *Methods* to debug ?
-                    
+            ; pre(m) is true in s, and m and θ are as general as possible}  ;;TODO: how to make it as general as possible? Wir haben keine Preconditions!
+             (let* ((unifying_methods (method-unifier methods current-task)) ;;TODO: write method-unifier or check if action-unifier can encompass both!
+		    
                        ; if M = empty then return failure
                      (cond ((null Methods-lst)((error "There is no method that can be executed at this point! Please check your hddl-files and make sure that your tasks can be solved!")))
 			 ; nondeterministically choose a pair (m, θ) ∈ M
@@ -118,7 +115,6 @@
 ;; Ergebnis wäre dann eine Liste mit ((action . theta)(action . theta)...)
 ;; hier würde ich also auch gar nicht jede action einzeln übergeben, sondern gleich alle auf einmal
 
-;,TODO: theta muss form (param in a . param in task haben)
 (defun action-unifier(actions task)
   (let ((same_name)
   (unified_actions)
