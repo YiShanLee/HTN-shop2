@@ -29,119 +29,96 @@
 (defparameter *current-state* ()) ; the updated state from current position
 ;------------------------------------------------------------ 
 
-(defun shop2-operator(initial-state Tasks domain)
-;; Alisa: am besten wäre es wahrscheinlich, wenn wir in diesem let das Einlesen von Domain und Code 
-;; mit einbinden, also (*domain* (read-hddl-domain "domain-file")) (*problem* (read-hddl-problem "problem-file"))
-;; dann sollten wir die Funktion vielleicht so aufrufen lassen:  (defun shop2-operator(domain-file problem-file) und alles
-;; weitere wie initial-state und so weiter dann erst rausziehen, oder? Also das man zum Aufrufen wirklich nur (shop2-operator ("domain.hddl" "problem.hddl")) eintippen muss
-;; dann wäre es (let ((*domain* (read-hddl-domain "domain-file")) (*problem* (read-hddl-problem "problem-file"))
-;;           (Tsk (hddl-problem-task *problem*)) (initial-state (hddl-problem-init problem)) und dann alles, was du jetzt schon hast)
- (let ((T0 constraint(Tasks)) (substitution nil) (Plan) (current-state)) 
-    ;; Alisa: hier vielleicht auch noch für jede Task eine constraint-list anhängen, 
-    ;; die erstmal leer ist, und später bei Methoden-Aufrufen durch Subtasks gefüllt wird, 
-    ;; wenn es constraints gibt? Dann müssten wir für T0 auch immer nur prüfen, ob die constraint-Listen leer sind
-      (loop 
-        (if ((null Tasks)(return Plan)))
-        (setq current-task (car T0))
-           (cond ((hddl-action-name-p current-task-name) ;; Alisa: hier dann auch current-task-name! 
-               ; do, if primitive
-               (do ((actions *A* (cdr actions)) ; actions from domain knowledge *A*
-          ;; Alisa: ich glaube, hier wäre es sinnvoller, erst zu schauen, welche actions unifien 
-          ;;(also den selben Namen wie die task haben, die selben Parameter brauchen und dann die Parameter als theta zu speichern)
-          ;; und danach erst, ob die preconditions erfüllt sind, weil wir dann nur noch viel weniger actions durchgehen müssen!
-                    (actions-lst nil (cond ((satisfyp(actions current-task)) ;; Alisa: für satisfyp würde ich dann die Liste aller actions übergeben, die beim unifier rauskamen
-                                          (setq Actions-lst (push unifier((car actions) current-task) Actions-lst)))
-                                         (t Actions-lst)))
-                  )
-                    ((null actions) Actions-lst)) ; return actions-lst for debug ; 
-                      (cond ((eq Actions-lst nil) ((return fail-handling) (print "there is no desired action")))
-                                       ; (t (let ((act (car Action-lst)))   ;; Alisa: wir würden hier ja wie bei T0 einfach erstmal "nondeterministically" die erste Aktion auswählen
-                                         (t ((let ((act (car Action-lst))) ;; Alisa: fehlt hier danach ein setq?
-                                                  (setq current-state modify-status(current-state act)) ; TODO ;; Alisa: ich habe unten mal eine Funktion dafür angefangen
-                                                  (push (car act) Plan)
-                                                  (setq Tasks (remove current-task Tasks)) ;TODO function ;;Alisa: zusätzlich müssten wir dann auch schauen, dass wir die task aus allen task constraint-Listen löschen!
-                                                  (substitute (action current-task))) ; (variable initial-value modify-value)
-                                                 ))
-                                         )
-                      (setq T0 constraint(Tasks))) ; 
+(defun shop2-operator(domain-file problem-file)
+
+  (let* ((domain (read-hddl-domain domain-file))
+	 (problem (read-hddl-problem problem-file))
+	 (Tasks (hddl-problem-task problem))
+	 (current-state (hddl-problem-init problem))
+	 (Plan);;P = the empty plan
+         (methods (hddl-domain-methods domain)) 
+	 (actions (hddl-domain-actions domain))
+	 (T0 constraint(Tasks));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
+	 (current-task)) 
+
+    (loop 
+        (if ((null Tasks)(return Plan))) ;;if T = empty then return P
+        (setq current-task (car T0)) ;;nondeterministically choose any t € T0
+
+           ;;if t is a primitive task then
+      (cond ((hddl-action-name-p current-task-name)
+	     ;;A ← {(a, θ) : a is a ground instance of an operator in D, θ is a substitution that unifies {head(a), t}, and s satisfies a’s preconditions}
+             (let* ((unifying_actions (action-unifier actions current-task))
+		    (Actions-lst (action-satisfyp unifying_actions current-state)))
+               ;;if A = empty then return failure
+	       (cond ((null Actions-lst) ((error "There is no action that can be executed at this point! Please check your hddl-files and make sure that your tasks can be solved!")))
+		    
+		     ;;nondeterministically choose a pair (a, θ) ∈ A
+		     (t ((let ((act (car Action-lst)))
+			   (setq current-state modify-status(current-state act)) ;;modify s by deleting del(a) and adding add(a)
+			   (push (car act) Plan) ;;append a to P
+			    ;; modify T by removing t and applying θ
+			   (setq Tasks (remove-for-all-tasks current-task Tasks)) ;TODO function zusätzlich müssten wir dann auch schauen, dass wir die task aus allen task constraint-Listen löschen!
+			   (substitute (action current-task Tasks)))))) ;TODO: write function substitute!
+	       
+                     ;; T0 ← {t ∈ T : no task in T is constrained to precede t}
+               (setq T0 constraint(Tasks))))
+	    
               ; compound tasks
-              (t 
-                 (do ((mthds *m* (cdr methds)) ;; methods from domain as local variables 
-            ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
-            ; pre(m) is true in s, and m and θ are as general as possible}
-      
-      ;; Alisa: auch hier würde ich erst die Zeile mit unifier und danach mit satisfyp ausführen
-                      (Methods-lst nil (cond ((satisfyp ((car mthds) current-task))
-                                            (setq Methods-lst (push unifier((car mthds) current-task) Methods-lst)))
-                                            (t Methods-lst)))) ; if not fulfill the conditions, return Methods-list to restore current history.
-                      )
-                     ((null mthds) Methods-lst) ; return *Methods* to debug 
-                     ; another return value
+            (t
+	     ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
+            ; pre(m) is true in s, and m and θ are as general as possible}  ;;TODO: how to make it as general as possible?
+               (let* ((unifying_methods (method-unifier methods current-task)) ;;TODO: write method-unifier or check if action-unifier can encompass both!
+		      (Method-lst (method-satisfyp unifying_actions current-state))) ;;TODO: write method-satisfyp  
+            
+                     ((null mthds) Methods-lst) ; return *Methods* to debug ?
+                    
                        ; if M = empty then return failure
-                     (cond ((eq Methods-lst nil)((return fail-handling) (print "there is no desired methods")))
-                  ; nondeterministically choose a pair (m, θ) ∈ M
-    ;; Alisa: ; (t (let ((ms (car Methods-lst))) 
-              (t (do ((ms Methods-lst (cdr ms))
-                          ; modify T by removing t, adding sub(m), constraining each task
-                                  (Tsk Tsk (remove current-task Tsk))
-                                   ; in sub(m) to precede the tasks that t preceded
-                                    (subm (hddl-method-subtasks (car ms)))
-                  ;; Alisa: hier müssen wir noch die Subtasks zu Tsk hinzufügen und dort 
-                  ;; gegebenenfalls in die constraint-Listen der tasks! (überall wo current-task rausgelöscht wird, neue subtasks einfügen)
+                     (cond ((null Methods-lst)((error "There is no method that can be executed at this point! Please check your hddl-files and make sure that your tasks can be solved!")))
+			 ; nondeterministically choose a pair (m, θ) ∈ M
+			   (t (let* ((method (car Methods-lst))
+				     (subtasks (hddl-method-subtasks method)))
+                          ; modify T by removing t, adding sub(m), constraining each task in sub(m) to precede the tasks that t preceded
+                                (setq Tasks (remove-for-all-tasks current-task Task))
+				 (setq Tasks (add-constraints Tasks subtasks)) ;; TODO: write add-constraints
+				(push subtasks Tasks) ;;Frage an Prof. Wolter: ist das hier zu einschränkend? Da wir immer den ersten Wert herausnehmen, iel Beeinflussungsmöglichkeit!
                                    ;, and applying θ 
-                                    (substitution substitution (substitute (cdr ms)))) ; variable initial-value modify-value
-                                   ((null ms)  ) ; TODO return handle
+                                    (substitute (method current-task Tasks)))) ; TODO: write substitute!
                                    ; if sub(m) is not empty then T0 ← {t ∈ sub(m) : no task in T is constrained to precede t}
-                                   (cond ((subm) (setq T0 constraint(subm))) ;; Alisa: hier müssen wir T0 ganz neu erstellen, aus nur den Subtasks, die keine constraints haben
-                                         (t  (setq T0 constraint(Tasks))))) ;; Alisa ansonsten müssen wir T0 wieder wie oben erstellen, also aus nur den tasks in Tsk, die keine constraints haben
-                          )
-                                       )
-              )
-          )
-        )      
-    )
+                                   (cond ((subtasks) (setq T0 constraint(subtasks)))
+                                         (t  (setq T0 constraint(Tasks)))))
+                          ))))))
+                                       
 ; constraint T to T0 
 ;; Alisa: muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
 ;; ich würde ganz am Anfang des Codes für jede task in Tsk eine leere Liste erstellen, die die constraints enthält,
 ;; dann müssten hier nur prüfen, ob die constraints leer sind oder nicht
 ;; dann müssen wir bei den Methoden dran denken, dass die constraints bei den Subtasks eingefügt werden müssen
 
-  (defun constraint2 (tasks)
+  (defun constraint (tasks)
     (let ((t0))
       (loop for task in tasks do
-  (if (null (cdr task)) 
-      (cons task t0)))
-      t0))
+		(if (null (hddl-task-constraints task)) 
+			(push task t0)))
+      (reverse t0)))
 
-(defun constraint (tasks)
-  (return tasks))
 
-;; satisfy check 
-; parameters (action), (*current-state*)
-; check the precondition of one action suits current-state
-; A ← {(a, θ) : a is a ground instance of an operator in D, θ is a substitution that unifies {head(a), t von problem}, and (s von problem) satisfies a’s preconditions}
-
-;; Alisa: für alle eingegebenen Aktionen prüfe, ob die preconditions einer Aktion im aktuellen Status erfüllt sind, falls ja, füge sie in Ergebnisliste ein
+;; für alle eingegebenen Aktionen prüfe, ob die preconditions einer Aktion im aktuellen Status erfüllt sind, falls ja, füge sie in Ergebnisliste ein
 ;; preconditions sind dann erfüllt, wenn sie im aktuellen Status enthalten sind
-;; gibt es auch negative preconditions?
-  (defun satisfyp2(actions current-status)
+  ;; gibt es auch negative preconditions?
+  ;;Achtung: actions haben jetzt die Form (a. theta)
+  (defun action-satisfyp(actions current-state)
     (let ((satisfying_actions))  
       (loop for a in actions do
-    (let ((preconditions (hddl-action-preconditions a))
+    (let ((preconditions (hddl-action-preconditions (car a)))
         (satisfies T))  ;;set satyisfies to true at first and let it be disproven for every action
     (loop for p in preconditions do
-      (if (not(find p current-status))
+      (if (not(find p current-state))
     (setq satisfies nil)))
     (if satisfies
         (push a satisfying_actions)))
   (reverse satisfying_actions))))   
 
-
-
-(defun satisfyp (act tsk)
-  (cond (()())
-    (t (return nil)))
-  )
   
 ;; content check
 (defun contentp (act tsk)
@@ -156,7 +133,7 @@
 ;; Ergebnis wäre dann eine Liste mit ((action . theta)(action . theta)...)
 ;; hier würde ich also auch gar nicht jede action einzeln übergeben, sondern gleich alle auf einmal
 
-(defun unify(actions task)
+(defun action-unifier(actions task)
   (let ((same_name)
   (unified_actions)
   (taskname (hddl-task-name task));;get name and params of task for easier comparing
