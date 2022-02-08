@@ -52,7 +52,7 @@
               ; compound tasks
             (t
 	     ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
-            ; pre(m) is true in s, and m and θ are as general as possible}  ;;TODO: how to make it as general as possible? Wir haben keine Preconditions!
+            ; and m and θ are as general as possible}  ;;TODO: how to make it as general as possible? Wir haben keine Preconditions!
              (let* ((unifying_methods (method-unifier methods current-task)) ;;TODO: write method-unifier or check if action-unifier can encompass both!
 		    
                        ; if M = empty then return failure
