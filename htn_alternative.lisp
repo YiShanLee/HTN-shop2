@@ -1,20 +1,4 @@
-;; path for status check
-(defparameter *paths* nil)
 
-;;; fail control
-;; record the failure path
-(defstruct failure acton)
-;; failsystem
-(defconstant failsym `@)
-
-;-----------------------------
-;;;; knowledge from input 
-;; domain knowledge
-(defparameter *T* '()) ; tasks from the beginning input
-(defparameter *M* '()) ; methods from the domain knowledge
-(defparameter *A* '()) ; actions from the domain knowledge
-;; problem 
-(defparameter initial-state '()) ; the beginning state of one problem
 ;-----------------------------
 ;;;; global variables for the shop2-operator
 ;; initialized plan
@@ -31,9 +15,9 @@
 
 (defun shop2-operator(domain-file problem-file)
 
-  (let* ((domain (read-hddl-domain domain-file))
-	 (problem (read-hddl-problem problem-file))
-	 (Tasks (hddl-problem-task problem))
+  (let* ((domain (read-hddl-domain domain-file)) ;; read domain-file -> domain structure
+	 (problem (read-hddl-problem problem-file)) ;;read problem-file -> problem-structure
+	 (Tasks (hddl-problem-task problem)) ;;our tasks to be solved come from the problem-file
 	 (current-state (hddl-problem-init problem))
 	 (Plan);;P = the empty plan
          (methods (hddl-domain-methods domain)) 
@@ -50,16 +34,17 @@
 	     ;;A ← {(a, θ) : a is a ground instance of an operator in D, θ is a substitution that unifies {head(a), t}, and s satisfies a’s preconditions}
              (let* ((unifying_actions (action-unifier actions current-task))
 		    (Actions-lst (action-satisfyp unifying_actions current-state)))
+	       
                ;;if A = empty then return failure
 	       (cond ((null Actions-lst) ((error "There is no action that can be executed at this point! Please check your hddl-files and make sure that your tasks can be solved!")))
 		    
 		     ;;nondeterministically choose a pair (a, θ) ∈ A
 		     (t ((let ((act (car Action-lst)))
 			   (setq current-state modify-status(current-state act)) ;;modify s by deleting del(a) and adding add(a)
-			   (push (car act) Plan) ;;append a to P
+			   (push act Plan) ;;append a to P  ;TODO: mit oder ohne theta?
 			    ;; modify T by removing t and applying θ
 			   (setq Tasks (remove-for-all-tasks current-task Tasks)) ;TODO function zusätzlich müssten wir dann auch schauen, dass wir die task aus allen task constraint-Listen löschen!
-			   (substitute (action current-task Tasks)))))) ;TODO: write function substitute!
+			   (substitute ((cdr act) Tasks)))))) ;TODO: write function substitute!
 	       
                      ;; T0 ← {t ∈ T : no task in T is constrained to precede t}
                (setq T0 constraint(Tasks))))
@@ -67,12 +52,9 @@
               ; compound tasks
             (t
 	     ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
-            ; pre(m) is true in s, and m and θ are as general as possible}  ;;TODO: how to make it as general as possible?
-               (let* ((unifying_methods (method-unifier methods current-task)) ;;TODO: write method-unifier or check if action-unifier can encompass both!
-		      (Method-lst (method-satisfyp unifying_actions current-state))) ;;TODO: write method-satisfyp  
-            
-                     ((null mthds) Methods-lst) ; return *Methods* to debug ?
-                    
+            ; and m and θ are as general as possible}  ;;TODO: how to make it as general as possible? Wir haben keine Preconditions!
+             (let* ((unifying_methods (method-unifier methods current-task)) ;;TODO: write method-unifier or check if action-unifier can encompass both!
+		    
                        ; if M = empty then return failure
                      (cond ((null Methods-lst)((error "There is no method that can be executed at this point! Please check your hddl-files and make sure that your tasks can be solved!")))
 			 ; nondeterministically choose a pair (m, θ) ∈ M
@@ -120,12 +102,12 @@
   (reverse satisfying_actions))))   
 
   
-;; content check
-(defun contentp (act tsk)
-  (let (()))
+;; removes tasks that have been finished by adding actions to the plan from the Tasks list, and from every task-constraint-list in Tasks
+(defun remove-for-all-tasks (curren-task Tasks)
+  ;;TODO!
   )
  
-;;Alisa: unifier sollte am besten 
+;;unifier sollte am besten 
 ;;1. alle actionen sammeln, die den gleichen Namen haben wie die task
 ;;2. prüfen, ob die gleiche Anzahl Parameter vorliegt (Länge der Liste)
 ;;3. prüfen, ob die Parameter den selben Typ haben (Reihenfolge in Parameterliste egal)
@@ -151,27 +133,30 @@
     ;;collect all parameter-types of an action
        (let* ((a-params (hddl-action-parameters a))
         (a-paramtypes (loop for p in a-params collect
-                (cdr p))))
+					      (cdr p)))
+	      (copy-list a-params)
+	      (theta))
          ;;loop through the task-parameter-types; whenever the same type is found in the action parameter-type-list, remove it there; if after the loop the a-paramtypes list is empty, the action can be unified with the task, set the parameters of the task as theta
-         (loop for type in taskparam-types do
+	 (loop for taskparam in taskparams do
+	   (loop for actionparam in a-params do
+	     (if (eq (cdr taskparam)(cdr actionparam)) ;;if the types are the same
+		 (push (cons (car actionparam)taskparam) theta) ;;push the variable to be substituted and the substitution to theta: (v1? . (truck-0 . VEHICLE))
+		 (remove actionparam copy-list))) ;; remove it from the copied actionparam list
+	   (if (null copy-list)         ;; only if the list is empty both sets of parameters match exactly
+	       (push (cons a theta) unified_actions))))) ;;push the action and related theta to the result-list
+    (reverse unified_actions)))
+	 
+         #|(loop for type in taskparam-types do
            (if (find type a-paramtypes)
          (remove type a-paramtypes)))
          (if (null a-paramtypes) ;; testen das task-parametertypes auch null
        (push (cons a taskparams) unified_actions))))
-   (reverse unified_actions)))
+   (reverse unified_actions)))|#
 
 
 
-
-; unfiier 
-; if task exist in actions then union and return true
-; TODO
-; two parameters check
-; (defun unifier (act tsk)
-;   )
-
-; ; substitution 
-; (defun substitute (theta)
+; substitution: muss alle Variablen in Tasks entsprechend Theta substituieren
+; (defun substitute (theta Tasks)
 ;   )
 
 ;; Alisa: hier würde ich denke ich (defun modify (status action) schreiben, damit wir den aktuellen
