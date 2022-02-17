@@ -1,4 +1,4 @@
-;-----------------------------
+;-----------------------------------------------------------
 ;;;; global variables for the shop2-operator
 ;; initialized plan
 (defparameter *Plan* '())
@@ -11,27 +11,51 @@
 ; (defparameter *unifier* '()) ;a association of variables that shows current state
 (defparameter *current-state* ()) ; the updated state from current position
 ;------------------------------------------------------------ 
-
+;; main method for first hierarchical layer of shop2
 (defun shop2-operator(domain-file problem-file)
-
   (let* ((domain (read-hddl-domain domain-file))
    (problem (read-hddl-problem problem-file))
    (Tasks (hddl-problem-task problem))
    (current-state (hddl-problem-init problem))
    (Plan);;P = the empty plan
-    (methods (hddl-domain-methods domain)) 
+   (methods (hddl-domain-methods domain)) 
    (actions (hddl-domain-actions domain))
    (T0 constraint(Tasks));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
    (current-task)
    (substitution)
    ) 
-      (loop 
-        (if (null Tasks)(return Plan))
-            (setq current-task (car T0))
-          (cond (hddl-action-name-p (hddl-task-name current-task) ) ;; Alisa: hier dann auch current-task-name! 
-                (let* ((unifying_actions (action-unifier actions current-task))
-                      (Actions-lst (action-satisfyp unifying_actions current-state)))
-                      (cond ((eq Actions-lst nil) (error (make-condition 'failure-handling :actual-input 'action)))
+    (loop for current-task in T0
+          (if (null Tasks) (return P))
+          while current-task
+          do (resolve-task domain problem current-state Plan methods actions T0 current-task substitution Tasks)
+      )
+    )
+  )
+;; second hierarchical layer of shop2 
+;; check primitive and restore the plan 
+(defun resolve-task (domain problem current-state Plan methods actions T0 current-task substitution Tasks) 
+  (if 
+    ((primitivep current-task)
+    ; primitive (true)
+    (update-primitive-task Plan actions current-task substitution Tasks current-state T0))
+    ; non-primitive (nil)
+    (update-nonprimitive-task Plan methods current-task substitution Tasks current-state T0)
+    )
+)
+  
+ (defun primitivep (task)
+   (if (eql (type-of task) 'HDDL-ACTION)
+     T
+     nil
+     )
+   )
+ 
+ ;; third hierarchical layer of shop2
+ ;; unify action and update state from primitive task
+ (defun update-primitive-task (Plan actions current-task substitution Tasks current-state T0)
+   (let* ((unifying_actions (action-unifier actions current-task))
+          (Actions-lst (action-satisfyp unifying_actions current-state)))
+                      (cond ((eq Actions-lst nil) (backtrack current-task)
                                          (t ((let* ((act (car Action-lst))) 
                                                   (setq current-state modify-status(current-state act)) 
                                                   (push (car act) Plan)
@@ -39,12 +63,13 @@
                                                   (substitution (substitute (act current-task)))) 
                                                  ))
                                          )
-                      (setq T0 constraint(Tasks))) ; 
-              ; compound tasks
-              (t 
-                  (let (Methods-lst (unify-m (methods current-task current-state))) 
+                      (setq T0 constraint(Tasks)))
+   )
+ ;; unify action and update state from nonprimitive task
+ (defun update-nonprimitive-task (Plan methods current-task substitution Tasks current-state T0)
+   (let (Methods-lst (unify-m methods current-task current-state)) 
                        ; if M = empty then return failure
-                     (cond ((eq Methods-lst nil) (error (make-condition 'failure-handling :actual-input 'method)))
+                     (cond ((eq Methods-lst nil) (backtrack current-task))
                   ; nondeterministically choose a pair (m, θ) ∈ M
                                (t (let* ((ms (car Methods-lst))
                           ; modify T by removing t, adding sub(m), constraining each task
@@ -59,12 +84,8 @@
                                    (cond ((subm) (setq T0 constraint(subm))) 
                                          (t  (setq T0 constraint(Tasks))))) 
                                        ))
-              )
-          )
-        )     
-    )
-      )
- 
+   )
+ ;-------------------------------------------------------------
 ; constraint T to T0 
 ;; Alisa: muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
 ;; ich würde ganz am Anfang des Codes für jede task in Tsk eine leere Liste erstellen, die die constraints enthält,
@@ -82,7 +103,7 @@
 ;; preconditions sind dann erfüllt, wenn sie im aktuellen Status enthalten sind
   ;; gibt es auch negative preconditions?
   ;;Achtung: actions haben jetzt die Form (a. theta)
-  (defun action-satisfyp(actions current-state)
+  (defun action-satisfyp (actions current-state)
     (let ((satisfying_actions))  
       (loop for a in actions do
     (let ((preconditions (hddl-action-preconditions (car a)))
@@ -137,11 +158,11 @@
       ;; Alisa: auch hier würde ich erst die Zeile mit unifier und danach mit satisfyp ausführen
 ;; satisfyp-m 
 ; return a list of methods to filter the precondition of methods fitting the current-state
-(defun satisfyp-m (m state)
-  (let ((satisfied-m nil))
+(defun method-satisfyp (m state)
+  (let ((method-satisfied nil))
     (loop
-      (cond ((null m) (return satisfied-m))
-          ((not (null (find ((hddl-method-preconditions (car m)) state)))) (setq satisfied-m (push (car m) satisfied-m))))
+      (cond ((null m) (return method-satisfied))
+          ((not (null (find ((hddl-method-preconditions (car m)) state)))) (setq method-satisfied (push (car m) method-satisfied))))
       (setq m (cdr m))
     )))
 
@@ -150,7 +171,7 @@
 ; prueft, ob Typen der Parameters gleich
 ; return a unified list such as {(m . theta)...}      
 (defun unify-m (methods task state)
-  (let ((m (satisfyp-m (methods state)))
+  (let ((m (method-satisfyp (methods state)))
         (task-name (hddl-task-name task))
         (taskparams (hddl-task-parameters task))
         (taskparam-types (cadr (apply #'mapcar #'list (hddl-task-parameters task))))
@@ -167,9 +188,6 @@
     )
   )
 )
-; ; substitution 
-; (defun substitute (theta)
-;   )
 
 ;; Alisa: hier würde ich denke ich (defun modify (status action) schreiben, damit wir den aktuellen
 ;; Status auch mitübergeben, den wir dann verändern
@@ -185,9 +203,22 @@
       (push e new-status)))
       (cons new-status addeffect)
       new-status))
-       
-
+;------------------------------------------------------------
+;;; substitution with unifier and replace the required variables within each update
+;; unify with variables 
+(defun substitute ()
+)
+;-------------------------------------------------------------
+;;; backtrack to tasks list 
+(defun backtrack (tag task)
   
+  )
+;-------------------------------------------------------------
+;; CRUD task
+(defun add-task ())
+(defun remove-task ())
+(defun update-task ())
+;-------------------------------------------------------------
 ;; failure handling
 (define-condition failure-handling (err)
   ((actual-input :initarg :actual-input
