@@ -1,4 +1,8 @@
 
+(defpackage :read-hddl-package
+  (:use :cl)(:nicknames :read-hddl :hddl))
+(in-package :read-hddl-package)
+
 ;;define global variables
 (defparameter *domain* (make-hash-table))
 (defparameter *problem* (make-hash-table))

@@ -15,61 +15,61 @@
 
 (defun shop2-operator(domain-file problem-file)
 
-  (let* ((domain (read-hddl-domain domain-file)) ;; read domain-file -> domain structure
-	 (problem (read-hddl-problem problem-file)) ;;read problem-file -> problem-structure
-	 (Tasks (hddl-problem-task problem)) ;;our tasks to be solved come from the problem-file
-	 (current-state (hddl-problem-init problem))
+  (let* ((domain (hddl::read-hddl-domain domain-file)) ;; read domain-file -> domain structure
+	 (problem (hddl::read-hddl-problem problem-file)) ;;read problem-file -> problem-structure
+	 (Tasks (hddl::hddl-problem-task problem)) ;;our tasks to be solved come from the problem-file
+	 (current-state (hddl::hddl-problem-init problem))
 	 (Plan);;P = the empty plan
-         (methods (hddl-domain-methods domain)) 
-	 (actions (hddl-domain-actions domain))
-	 (T0 constraint(Tasks));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
+         (methods (hddl::hddl-domain-methods domain)) 
+	 (actions (hddl::hddl-domain-actions domain))
+	 (T0 (constraint Tasks));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
 	 (current-task)) 
 
     (loop 
-        (if ((null Tasks)(return Plan))) ;;if T = empty then return P
+        (if (null Tasks)(return Plan)) ;;if T = empty then return P
         (setq current-task (car T0)) ;;nondeterministically choose any t € T0
 
            ;;if t is a primitive task then
-      (cond ((hddl-action-name-p current-task-name)
+      (cond ((hddl::hddl-action-name-p current-task-name)
 	     ;;A ← {(a, θ) : a is a ground instance of an operator in D, θ is a substitution that unifies {head(a), t}, and s satisfies a’s preconditions}
              (let* ((unifying_actions (action-unifier actions current-task))
-		    (Actions-lst (action-satisfyp unifying_actions current-state)))
+		    (Action-lst (action-satisfyp unifying_actions current-state)))
 	       
                ;;if A = empty then return failure
-	       (cond ((null Actions-lst) ((error "There is no action that can be executed at this point! Please check your hddl-files and make sure that your tasks can be solved!")))
+	       (cond ((null Action-lst) (error "There is no action that can be executed at this point! Please check your hddl-files and make sure that your tasks can be solved!"))
 		    
 		     ;;nondeterministically choose a pair (a, θ) ∈ A
-		     (t ((let ((act (car Action-lst)))
-			   (setq current-state modify-status(current-state act)) ;;modify s by deleting del(a) and adding add(a)
+		     (t (let ((act (car Action-lst)))
+			   (setq current-state (modify-status current-state act)) ;;modify s by deleting del(a) and adding add(a)
 			   (push act Plan) ;;append a to P  ;TODO: mit oder ohne theta?
 			    ;; modify T by removing t and applying θ
 			   (setq Tasks (remove-for-all-tasks current-task Tasks)) ;TODO function zusätzlich müssten wir dann auch schauen, dass wir die task aus allen task constraint-Listen löschen!
-			   (substitute ((cdr act) Tasks)))))) ;TODO: write function substitute!
+			   (hddl-substitute ((cdr act) Tasks))))) ;TODO: write function substitute!
 	       
                      ;; T0 ← {t ∈ T : no task in T is constrained to precede t}
-               (setq T0 constraint(Tasks))))
+               (setq T0 (constraint Tasks))))
 	    
               ; compound tasks
             (t
 	     ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
             ; and m and θ are as general as possible}  ;;TODO: how to make it as general as possible? Wir haben keine Preconditions!
-             (let* ((unifying_methods (method-unifier methods current-task)) ;;TODO: write method-unifier or check if action-unifier can encompass both!
+             (let* ((Methods-lst (method-unifier methods current-task))) ;;TODO: write method-unifier or check if action-unifier can encompass both!
 		    
                        ; if M = empty then return failure
-                     (cond ((null Methods-lst)((error "There is no method that can be executed at this point! Please check your hddl-files and make sure that your tasks can be solved!")))
+                     (cond ((null Methods-lst)(error "There is no method that can be executed at this point! Please check your hddl-files and make sure that your tasks can be solved!"))
 			 ; nondeterministically choose a pair (m, θ) ∈ M
-			   (t (let* ((method (car Methods-lst))
+			   (t (let* ((selected-method (car Methods-lst))
 				     (subtasks (hddl-method-subtasks method)))
                           ; modify T by removing t, adding sub(m), constraining each task in sub(m) to precede the tasks that t preceded
                                 (setq Tasks (remove-for-all-tasks current-task Task))
 				 (setq Tasks (add-constraints Tasks subtasks)) ;; TODO: write add-constraints
 				(push subtasks Tasks) ;;Frage an Prof. Wolter: ist das hier zu einschränkend? Da wir immer den ersten Wert herausnehmen, iel Beeinflussungsmöglichkeit!
                                    ;, and applying θ 
-                                    (substitute (method current-task Tasks)))) ; TODO: write substitute!
+                                    (hddl-substitute (selected-method current-task Tasks)))) ; TODO: write substitute!
                                    ; if sub(m) is not empty then T0 ← {t ∈ sub(m) : no task in T is constrained to precede t}
-                                   (cond ((subtasks) (setq T0 constraint(subtasks)))
-                                         (t  (setq T0 constraint(Tasks)))))
-                          ))))))
+                                   (cond ((subtasks) (setq T0 (constraint subtasks)))
+                                         (t  (setq T0 (constraint Tasks)))))
+                          )))))))
                                        
 ; constraint T to T0 
 ;; Alisa: muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
@@ -80,7 +80,7 @@
   (defun constraint (tasks)
     (let ((t0))
       (loop for task in tasks do
-		(if (null (hddl-task-constraints task)) 
+		(if (null (hddl::hddl-task-constraints task)) 
 			(push task t0)))
       (reverse t0)))
 
@@ -92,7 +92,7 @@
   (defun action-satisfyp(actions current-state)
     (let ((satisfying_actions))  
       (loop for a in actions do
-    (let ((preconditions (hddl-action-preconditions (car a)))
+    (let ((preconditions (hddl::hddl-action-preconditions (car a)))
         (satisfies T))  ;;set satyisfies to true at first and let it be disproven for every action
     (loop for p in preconditions do
       (if (not(find p current-state))
@@ -103,7 +103,7 @@
 
   
 ;; removes tasks that have been finished by adding actions to the plan from the Tasks list, and from every task-constraint-list in Tasks
-(defun remove-for-all-tasks (curren-task Tasks)
+(defun remove-for-all-tasks (current-task Tasks)
   ;;TODO!
   )
  
@@ -118,8 +118,8 @@
 (defun action-unifier(actions task)
   (let ((same_name)
   (unified_actions)
-  (taskname (hddl-task-name task));;get name and params of task for easier comparing
-  (taskparams (hddl-task-parameters task))
+  (taskname (hddl::hddl-task-name task));;get name and params of task for easier comparing
+  (taskparams (hddl::hddl-task-parameters task))
   (taskparam-types (loop for p in taskparams collect
                (cdr p))))
     ;; first for all actions collect only those that have the same name & amount of parameters as the task
@@ -131,7 +131,7 @@
     ;;then compare if parameters have the same types
     (loop for a in same_name do
     ;;collect all parameter-types of an action
-       (let* ((a-params (hddl-action-parameters a))
+       (let* ((a-params (hddl::hddl-action-parameters a))
         (a-paramtypes (loop for p in a-params collect
 					      (cdr p)))
 	      (copy-list a-params)
@@ -156,8 +156,9 @@
 
 
 ; substitution: muss alle Variablen in Tasks entsprechend Theta substituieren
-; (defun substitute (theta Tasks)
-;   )
+(defun substitute (theta Tasks)
+;TODO
+ )
 
 ;; Alisa: hier würde ich denke ich (defun modify (status action) schreiben, damit wir den aktuellen
 ;; Status auch mitübergeben, den wir dann verändern
@@ -165,8 +166,8 @@
 ;; 1. durch die current-status-Liste iterieren und für alle negativen Effekte der Aktion herauslöschen
 ;; 2. alle positiven Effekte der Aktion hinzufügen, und das als neuen Status ausgeben lassen:
   (defun modify-status (status action)
-    (let ((addeffect (hddl-action-poseffect action))
-    (deleffect (hddl-action-negeffect action))
+    (let ((addeffect (hddl::hddl-action-poseffect action))
+    (deleffect (hddl::hddl-action-negeffect action))
     (new-status))
       (loop for e in status do
   (if (not(find e deleffect))
