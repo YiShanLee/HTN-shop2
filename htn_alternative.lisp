@@ -15,13 +15,13 @@
 
 (defun shop2-operator(domain-file problem-file)
 
-  (let* ((domain (hddl::read-hddl-domain domain-file)) ;; read domain-file -> domain structure
-	 (problem (hddl::read-hddl-problem problem-file)) ;;read problem-file -> problem-structure
-	 (Tasks (hddl::hddl-problem-task problem)) ;;our tasks to be solved come from the problem-file
+  (let* ((domain (hddl:read-hddl-domain domain-file)) ;; read domain-file -> domain structure
+	 (problem (hddl:read-hddl-problem problem-file)) ;;read problem-file -> problem-structure
+	 (Tasks (hddl:hddl-problem-tasks problem)) ;;our tasks to be solved come from the problem-file
 	 (current-state (hddl::hddl-problem-init problem))
 	 (Plan);;P = the empty plan
-         (methods (hddl::hddl-domain-methods domain)) 
-	 (actions (hddl::hddl-domain-actions domain))
+         (methods (hddl:hddl-domain-methods domain)) 
+	 (actions (hddl:hddl-domain-actions domain))
 	 (T0 (constraint Tasks));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
 	 (current-task)) 
 
@@ -59,7 +59,7 @@
                      (cond ((null Methods-lst)(error "There is no method that can be executed at this point! Please check your hddl-files and make sure that your tasks can be solved!"))
 			 ; nondeterministically choose a pair (m, θ) ∈ M
 			   (t (let* ((selected-method (car Methods-lst))
-				     (subtasks (hddl-method-subtasks method)))
+				     (subtasks (hddl:hddl-method-subtasks method)))
                           ; modify T by removing t, adding sub(m), constraining each task in sub(m) to precede the tasks that t preceded
                                 (setq Tasks (remove-for-all-tasks current-task Task))
 				 (setq Tasks (add-constraints Tasks subtasks)) ;; TODO: write add-constraints
@@ -80,7 +80,7 @@
   (defun constraint (tasks)
     (let ((t0))
       (loop for task in tasks do
-		(if (null (hddl::hddl-task-constraints task)) 
+		(if (null (hddl:hddl-task-constraints task)) 
 			(push task t0)))
       (reverse t0)))
 
@@ -92,7 +92,7 @@
   (defun action-satisfyp(actions current-state)
     (let ((satisfying_actions))  
       (loop for a in actions do
-    (let ((preconditions (hddl::hddl-action-preconditions (car a)))
+    (let ((preconditions (hddl:hddl-action-preconditions (car a)))
         (satisfies T))  ;;set satyisfies to true at first and let it be disproven for every action
     (loop for p in preconditions do
       (if (not(find p current-state))
@@ -118,20 +118,20 @@
 (defun action-unifier(actions task)
   (let ((same_name)
   (unified_actions)
-  (taskname (hddl::hddl-task-name task));;get name and params of task for easier comparing
-  (taskparams (hddl::hddl-task-parameters task))
+  (taskname (hddl:hddl-task-name task));;get name and params of task for easier comparing
+  (taskparams (hddl:hddl-task-parameters task))
   (taskparam-types (loop for p in taskparams collect
                (cdr p))))
     ;; first for all actions collect only those that have the same name & amount of parameters as the task
     (loop for a in actions do
       (let ((a-params (hddl-action-parameters a)))
-  (if (eq (hddl-action-name action) taskname)
+  (if (eq (hddl:hddl-action-name action) taskname)
       (if (eq (length taskparams) (length a-params)) ;; then compare types
     (push a same_name)))))
     ;;then compare if parameters have the same types
     (loop for a in same_name do
     ;;collect all parameter-types of an action
-       (let* ((a-params (hddl::hddl-action-parameters a))
+       (let* ((a-params (hddl:hddl-action-parameters a))
         (a-paramtypes (loop for p in a-params collect
 					      (cdr p)))
 	      (copy-list a-params)
@@ -166,8 +166,8 @@
 ;; 1. durch die current-status-Liste iterieren und für alle negativen Effekte der Aktion herauslöschen
 ;; 2. alle positiven Effekte der Aktion hinzufügen, und das als neuen Status ausgeben lassen:
   (defun modify-status (status action)
-    (let ((addeffect (hddl::hddl-action-poseffect action))
-    (deleffect (hddl::hddl-action-negeffect action))
+    (let ((addeffect (hddl:hddl-action-poseffect action))
+    (deleffect (hddl:hddl-action-negeffect action))
     (new-status))
       (loop for e in status do
   (if (not(find e deleffect))

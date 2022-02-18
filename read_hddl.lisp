@@ -1,11 +1,10 @@
 
 (defpackage :read-hddl-package
-  (:use :cl)(:nicknames :read-hddl :hddl))
+  (:use :cl)(:nicknames :read-hddl :hddl)
+  (:export read-file read-hddl-domain read-hddl-problem hddl-predicate hddl-method hddl-action hddl-domain hddl-task hddl-object hddl-problem))
 (in-package :read-hddl-package)
 
 ;;define global variables
-(defparameter *domain* (make-hash-table))
-(defparameter *problem* (make-hash-table))
 
 ;; structures for the elements of a hddl-domain or hddl-problem and for the problem and domain as a whole
 (defstruct hddl-predicate name parameters)
@@ -129,8 +128,7 @@
 	    ;;finally combine everything into domain structure:
 	   (setq domain (make-hddl-domain :name (second read-domain) :requirements hddl-requirements
 		    :types hddl-types :predicates hddl-predicates :tasks hddl-tasks
-					  :methods hddl-methods :actions hddl-actions))
-	   *domain* domain)))
+					  :methods hddl-methods :actions hddl-actions)))))
 			
 	       
 		       
@@ -180,8 +178,7 @@
       (setq hddl-tasks
 	    (loop for (name . parameters) in tasks collect
 		   (make-hddl-task :name name :parameters parameters :constraints nil))
-	    problem (make-hddl-problem :name (second read-problem) :domain (cdr (third read-problem)) :objects (typing (cdr (car objects))) :tasks hddl-tasks :ordering ordering :constraints constraints :init-status (cdr (car status))))
-    (setq *problem* problem)))))
+	    problem (make-hddl-problem :name (second read-problem) :domain (cdr (third read-problem)) :objects (typing (cdr (car objects))) :tasks hddl-tasks :ordering ordering :constraints constraints :init-status (cdr (car status))))))))
     
 
 ;;takes list of variables and types and returns a list of pairs (variable . type)
