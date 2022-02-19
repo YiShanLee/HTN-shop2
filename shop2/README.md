@@ -5,10 +5,10 @@
 	`C:\Users\Eve\quicklisp\local-projects`
 - Copy `shop2` file into the `local projects` repository.
 - Open Lisp from the directory `C:\Users\Eve\quicklisp\local-projects`.
-- Type in `(ql:quickload :shop2)`. 
-++ When errors show up in console, please choose the second option `<accept>` to let the filed be loaded ++
+- Type in `(ql:quickload :shop2)`. <\br>
+++ When errors show up in console, please choose the second option `<accept>` to let the file be loaded ++
 - Type in `(in-package shop2)` to use functions from shop2 file.
-++ When there is a need to go back to default package, please type in `(in-package :cl-user)`.
+++ When there is a need to go back to default package, please type in `(in-package :cl-user)`.++
 
 [] progress
 - all of the functions in readhtn.lisp is working, you can type in any function to try on yourself within shop2 package `(in-package shop2)`
@@ -26,4 +26,4 @@
 
 Specify license here
 
-++ Attach me if some issues happend
+++ Attach me if some issues happend ++
