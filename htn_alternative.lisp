@@ -60,23 +60,22 @@
             (t
 	     ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
             ; and m and θ are as general as possible}  ;;TODO: how to make it as general as possible? Wir haben keine Preconditions!
-             (let* ((Methods-lst (method-unifier methods current-task))) ;;TODO: write method-unifier or check if action-unifier can encompass both!
-		    
+             (let ((Methods-lst (method-unifier methods current-task current-state)))		    
                        ; if M = empty then return failure
                      (cond ((null Methods-lst)(error "There is no method that can be executed at this point! Please check your hddl-files and make sure that your tasks can be solved!"))
 			 ; nondeterministically choose a pair (m, θ) ∈ M
 			   (t (let* ((selected-method (car Methods-lst))
-				     (subtasks (hddl:hddl-method-subtasks selected-method)))
+				     (subtasks (hddl:hddl-method-subtasks selected-method))
+				     (theta (cdr selected-method)))
                           ; modify T by removing t, adding sub(m), constraining each task in sub(m) to precede the tasks that t preceded
-                                (setq Tasks (remove-for-all-tasks current-task Task))
-				 (setq Tasks (add-constraints Tasks subtasks)) ;; TODO: write add-constraints
-				(push subtasks Tasks) ;;Frage an Prof. Wolter: ist das hier zu einschränkend? Da wir immer den ersten Wert herausnehmen, iel Beeinflussungsmöglichkeit!
-                                   ;, and applying θ 
-                                    (hddl-substitute (selected-method current-task Tasks)))) ; TODO: write substitute!
+                                (setq Tasks (remove-for-all-tasks current-task Task)
+				      Tasks (add-constraints Tasks subtasks)
+				      subtasks (task-substitute theta subtasks))
+				(push subtasks Tasks)))))  
                                    ; if sub(m) is not empty then T0 ← {t ∈ sub(m) : no task in T is constrained to precede t}
                                    (cond ((subtasks) (setq T0 (constraint subtasks)))
                                          (t  (setq T0 (constraint Tasks)))))
-                          )))))))
+                          )))))
                                        
 ; constraint T to T0 
 ;; Alisa: muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
@@ -108,6 +107,14 @@
         (push a satisfying_actions)))
   (reverse satisfying_actions))))   
 
+;;unnötig? bei uns keine preconditions
+(defun method-satisfyp (m state)
+  (let ((method-satisfied nil))
+    (loop
+      (cond ((null m) (return method-satisfied))
+          ((not (null (find ((hddl-method-preconditions (car m)) state)))) (setq method-satisfied (push (car m) method-satisfied))))
+      (setq m (cdr m))
+    )))
   
 ;; removes tasks that have been finished by adding actions to the plan from the Tasks list, and from every task-constraint-list in Tasks
 (defun remove-for-all-tasks (current-task Tasks)
@@ -152,6 +159,30 @@
 	       (push (cons a theta) unified_actions))))) ;;push the action and related theta to the result-list
     (reverse unified_actions)))
 
+
+;; unify-m 
+; prueft, ob die Laenge der Parameters gleich
+; prueft, ob Typen der Parameters gleich
+; return a unified list such as {(m . theta)...}      
+(defun method-unifier (methods task state)
+  (let ((m method-satisfyp (methods state)))
+        (task-name (hddl-task-name task))
+        (taskparams (hddl-task-parameters task))
+        (taskparam-types (cadr (apply #'mapcar #'list (hddl-task-parameters task))))
+        (taskparam (car (apply #'mapcar #'list (hddl-task-parameters task))))
+        (Methods-lst nil)
+        )
+    (loop
+      (cond ((and (eq (length taskparams) (length (hddl-method-parameters (car m))))
+                 (equalp (taskparam-types) (cadr (apply #'mapcar #'list (hddl-method-parameters (car m))))))
+            (setq Methods-lst (push (cons (car m) (car (apply #'mapcar #'list (hddl-method-parameters (car m))))) Methods-lst)))
+            ((null m) (return Methods-lst))
+            )
+      (setq m (cdr m))
+    )
+  )
+)
+
 ;;substitution: muss alle Variablen in action entsprechend Theta substituieren
 ;; reminder: elements of theta: (?v . (truck . vehicle)) -> (variable.(entity.type))
 
@@ -161,7 +192,7 @@
 	(a-neg-effects (hddl:hddl-action-neg-effects action)))
     ;; for all substitutions
     (loop for sub in theta do
-      ;;for all parameters
+      ;;parameter-substitution
       (loop for param in a-params do
 	;;check if first part of parameter matches first part of theta
 	(if (eq (car sub)(car param))
