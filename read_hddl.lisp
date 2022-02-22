@@ -1,7 +1,21 @@
 
+(defpackage :read-hddl-package
+  (:use :cl)(:nicknames :read-hddl :hddl)
+  (:export read-file read-hddl-domain read-hddl-problem
+	   hddl-predicate-name  hddl-predicate-parameters
+	   hddl-method-name hddl-method-parameters  hddl-method-task hddl-method-subtasks
+	   hddl-method-ordered-subtasks
+	   hddl-action-name hddl-action-name-p hddl-action-parameters hddl-action-preconditions
+	   hddl-action-neg-effects hddl-action-pos-effects
+	   hddl-domain-name hddl-domain-requirements  hddl-domain-types hddl-domain-predicates
+	    hddl-domain-tasks hddl-domain-methods hddl-domain- hddl-domain-actions
+	   hddl-task-name hddl-task-parameters hddl-task-constraints
+	   hddl-object-name hddl-object-type
+	   hddl-problem-name hddl-problem-domain  hddl-problem-objects hddl-problem-tasks
+	    hddl-problem-ordering hddl-problem-constraints hddl-problem-init-status))
+(in-package read-hddl-package)
+
 ;;define global variables
-(defparameter *domain* (make-hash-table))
-(defparameter *problem* (make-hash-table))
 
 ;; structures for the elements of a hddl-domain or hddl-problem and for the problem and domain as a whole
 (defstruct hddl-predicate name parameters)
@@ -125,8 +139,7 @@
 	    ;;finally combine everything into domain structure:
 	   (setq domain (make-hddl-domain :name (second read-domain) :requirements hddl-requirements
 		    :types hddl-types :predicates hddl-predicates :tasks hddl-tasks
-					  :methods hddl-methods :actions hddl-actions))
-	   *domain* domain)))
+					  :methods hddl-methods :actions hddl-actions)))))
 			
 	       
 		       
@@ -176,8 +189,7 @@
       (setq hddl-tasks
 	    (loop for (name . parameters) in tasks collect
 		   (make-hddl-task :name name :parameters parameters :constraints nil))
-	    problem (make-hddl-problem :name (second read-problem) :domain (cdr (third read-problem)) :objects (typing (cdr (car objects))) :tasks hddl-tasks :ordering ordering :constraints constraints :init-status (cdr (car status))))
-    (setq *problem* problem)))))
+	    problem (make-hddl-problem :name (second read-problem) :domain (cdr (third read-problem)) :objects (typing (cdr (car objects))) :tasks hddl-tasks :ordering ordering :constraints constraints :init-status (cdr (car status))))))))
     
 
 ;;takes list of variables and types and returns a list of pairs (variable . type)
