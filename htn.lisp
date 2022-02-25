@@ -1,9 +1,17 @@
+;-------------------------------------------
+#|shop2.todo
+## TODO:
+1. while loop inside shop2-plan
+2. debug method unifier and satisfy & primitive task & non primitive task functions
+3. print status for current-standpoint 
+4. run read input
+|#
+;-------------------------------------------
 ;; main stream of shop2
 (defun main-operator ()
   (read-input)
   (shop2-plan)
   )
-
 (defun read-input (&optional (domain-path "domain.hddl") (problem-path "problem.hddl"))
 ; (defun read-input ()
 (unless domain-path (setq domain-path "domain.hddl" "problem.hddl"))
@@ -72,7 +80,7 @@
                                          ))
    )
  
- (defun update-action-values (action state Plan Tasks substitution)
+ (defun update-action-values (actions state Plan Tasks substitution)
    (let* ((act (car Action-lst)) 
            (theta (cdr act)))
           (setq act (act-substitute theta action)
@@ -86,8 +94,7 @@
  
  ;; unify methods and update state from nonprimitive task
  (defun update-nonprimitive-task (Plan methods current-task substitution Tasks current-state T0)
-   (let (Methods-lst (method-unifier methods current-task current-state)) 
-        
+   (let* (Methods-lst (method-satisfy methods current-task)) ; {(m . theta)...}  
         (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
               (t  (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ; else, from begin
                     (update-nonprimitive-values Methods-lst current-state Plan Tasks substitution))) ; nondeterministically choose a pair (m, θ) ∈ M
@@ -95,11 +102,11 @@
                                        ))
    )
  
- (defun update-nonprimitive-values (Actions-lst current-state Plan Tasks substitution)
+ (defun update-nonprimitive-values (Methods-lst current-state Plan Tasks substitution)
    (let* ((ms (car Methods-lst))
           (Tasks (remove-task current-task Tasks)) ; modify T by removing t, adding sub(m), constraining each task     
           (subm (hddl-method-subtasks (car ms))) ; in sub(m) to precede the tasks that t preceded
-          (substitution (substitute (cdr ms))))
+          (substitution (method-substitute (cadr ms))))
      (if (not (null subm)) (setq T0 constraint(subm))
          (setq T0 constraint(Tasks)))
      (return-from update-nonprimitive-values (values Plan Tasks current-state substitution T0))
@@ -195,8 +202,6 @@
 ;----------------------------------------------------------------------------
  ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
             ; pre(m) is true in s, and m and θ are as general as possible}
-      ;; Alisa: auch hier würde ich erst die Zeile mit unifier und danach mit satisfyp ausführen
-; return a list of methods to filter the precondition of methods fitting the current-state
 
 ;;;parameters-binding 
 ;; output: (?V TRUCK-0 VEHICLE)) (?L2 CITY-LOC-0 LOCATION)) as theta
@@ -212,7 +217,7 @@
           (setq reversed-op-param (mapcar #'reverse op-param))
           (setq binding-list (cons (cons (cadr (assoc (cadr one-set) reversed-op-param)) one-set) binding-list))
           )
-    (return-from parameters-binding binding-list) ; (?V TRUCK-0 VEHICLE)) (?L2 CITY-LOC-0 LOCATION))
+    (return-from parameters-binding (list binding-list)) ; ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-0 LOCATION))
     )
   )
 
@@ -227,37 +232,36 @@
         (task-params (hddl-task-parameters task))
         (Methods-lst nil)
         )
-      (cond ((eq task-name m-name) (return-from method-unifier T))
-            ((same-parameters-p task-params m-params) (return-from method-unifier T)))
-            (t (return nil)))
+      (cond ((eq task-name m-name) (return-from method-unifier-p T))
+            ((same-parameters-p task-params m-params) (return-from method-unifier-p T)))
+            (t (return-from method-unifier-p nil)))
   )
+;; ok
 (defun same-parameters-p (task-params m-params) ; (TRUCK-0 CITY-LOC-0) / ((?V VEHICLE) (?L2 LOCATION))
   (let ((types (hddl-problem-objects *problem*))
         (task-type nil)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE)
-  (dotimes (i task-params)
+  (dotimes (i (length task-params))
       (setq one-set (assoc (nth i task-params) types)) ;(TRUCK-0 VEHICLE)
       (setq task-type (cons (cadr one-set) task-type))
     )
-  (setq m-type (cadr (apply #'mapcar #'list m-params))
-  (if (eql task-type m-type) (retrun-from same-parameters-p T) nil)
+  (setq m-type (cadr (apply #'mapcar #'list m-params))) ;(VEHICLE LOCATION)
+  (setq m-type (sort m-type #'string<))
+  (setq task-type (sort task-type #'string<))  
+  (if (equal task-type m-type) (return-from same-parameters-p T) (return-from same-parameters-p nil))
   )
-  ))
+  )
 
 ;; method-satisfyp 
-; pre(m) igno..
-; ; return a unified list such as {(m . theta)...} 
-(defun method-satisfyp (methods curr-state)
-  
+;; pre(m) to be seen as deprecated tuple
+;; output: {(method . theta)...}
+(defun method-satisfy (methods task)
+  (let ((method-satisfied nil))
+    (dotimes (i (length methods))
+      (setq method (nth i methods))
+      (if (method-unifier-p method task) (setq method-satisfied (cons (cons method (parameters-binding method task)) method-satisfied)))
+    ) (return-from method-satisfy (values method-satisfied))
   )
-;--------------------------------------------------
-; (defun method-satisfyp1 (m state)
-;   (let ((method-satisfied nil))
-;     (loop
-;       (cond ((null m) (return method-satisfied))
-;           ((not (null (find ((hddl-method-preconditions (car m)) state)))) (setq method-satisfied (push (car m) method-satisfied))))
-;       (setq m (cdr m))
-;     )))
-;----------------------------------------------------
+)
 
 ;; Alisa: hier würde ich denke ich (defun modify (status action) schreiben, damit wir den aktuellen
 ;; Status auch mitübergeben, den wir dann verändern
@@ -276,7 +280,10 @@
 ;------------------------------------------------------------
 ;;; substitution with unifier and replace the required variables within each update
 ;; unify variables 
-(defun substitute (action task)
+(defun action-substitute (action task)
+  
+)
+(defun method-substitute (action task)
   
 )
 ;;substitution: muss alle Variablen in action entsprechend Theta substituieren
