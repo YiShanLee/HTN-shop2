@@ -1,4 +1,142 @@
+;-------------------------------------------
+#|shop2.todo
+## TODO:
+0. set T0 as global variable, such that while-loop always uses the T0 we are currently 
+working with
+1. while loop inside shop2-plan
+2. debug method unifier and satisfy & primitive task & non primitive task functions
+3. print status for current-standpoint 
+4. run read input
+|#
+;-------------------------------------------
+;; main stream of shop2
+(defun main-operator ()
+  (read-input)
+  (shop2-plan)
+  )
+(defun read-input (&optional (domain-path "domain.hddl") (problem-path "problem.hddl"))
+(unless domain-path (setq domain-path "domain.hddl" "problem.hddl"))
+  (princ "Enter domain file")
+  (setq domain-path (string(read)))
+  (princ "Enter problem file")
+  (setq problem-path (string(read)))
+  ;; global variables from domain knowledge and problem.hddl
+  (defparameter *domain* (hddl:read-hddl-domain domain-path))
+  (defparameter *problem* (hddl:read-hddl-problem problem-path)))
 
+;--------------------------------------------
+;; main method for first layer of shop2
+(defun shop2-plan(&optional plan tasks state substitution T0)
+  (let* (
+   (tasks (Hddl:hddl-problem-tasks *problem*))
+   (current-state (hddl:hddl-problem-init-status *problem*))
+   (Plan plan);;P = the empty plan
+   (methods (hddl:hddl-domain-methods *domain*)) 
+   (actions (hddl:hddl-domain-actions *domain*))
+   (T0 (constraint(tasks)));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
+   (substitution substitution) ;; warum substitution?
+   ) 
+    
+	(loop while (not (null T0)) do
+		(if (null tasks) (return Plan))
+        (setq current-task (car T0)
+			  T0 (cdr T0))
+		(resolve-task *domain* *problem* current-state Plan methods actions T0 current-task substitution tasks)
+	;; Frage: müssen wir domain und problem als globale Variablen überhaupt übergeben
+	;; müssen wir T0 übergeben, wenn wir hier loopen?
+	)))
+  
+;; second layer of shop2 
+;; check primitive and restore the plan 
+(defun resolve-task (domain problem current-state Plan methods actions T0 current-task substitution Tasks) 
+  (if (primitivep current-task actions)
+    ; primitive (true)
+	;Frage: warum substitution, nötig?
+    (update-primitive-task Plan actions current-task substitution Tasks current-state T0) ;todo handle return value from function
+    ; non-primitive (nil)  
+    (update-nonprimitive-task Plan methods current-task substitution Tasks current-state T0) ;todo handle return value from function
+    )
+)
+
+
+(defun primitivep (task actions)
+ (let ((taskname (hddl:hddl-task-name task)))
+ (loop for a in actions do
+  (if (eq (hddl:hddl-action-name a) taskname)
+      (return t)))
+     (return nil)))	  
+
+ 
+ ;; third layer of shop2
+ ;; unify action and update state from primitive task
+ (defun update-primitive-task (Plan actions current-task substitution Tasks current-state T0)
+   ;;A ← {(a, θ) : a is a ground instance of an operator in D, θ is a substitution that unifies {head(a), t}, and s satisfies a’s preconditions}
+   (let* ((unifying_actions (action-unifier actions current-task))
+          (Actions-lst (action-satisfyp unifying_actions current-state)))
+                      (cond ((null Actions-lst) (return-from update-primitive-task nil))
+                                         
+										 ;; TODO: Frage, müsste es hier nicht andersherum sein, wir werten erst aus und fangen dann von vorne an?
+			  ;; Bzw. durch while-Schleife müssen wir gar nicht von vorne anfangen, sondern nur die entsprechenden Variablen anpassen (T0, Tasks, Plan)
+			
+										 (t (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ;return updated list
+                                              (update-action-values Actions-lst current-state Plan Tasks substitution))
+                                                 ))
+                                         ))
+   )
+ 
+ (defun update-action-values (actions state Plan Tasks substitution)
+ ;;nondeterministically choose a pair (a, θ) ∈ A -> choose first action
+   (let* ((act (car Action-lst)) 
+           (theta (cdr act)))
+		   ;;apply θ action
+		   ;TODO: write function substitute!
+          (setq act (act-substitute theta action)
+		  ;;modify s by deleting del(a) and adding add(a)
+                current-state (modify-status current-state act)) 
+			;;append a to P
+          (push act Plan))
+		  ;; modify T by removing t and applying theta
+		(setq Tasks (task-substitute theta Tasks)
+          (Tasks (remove-task current-task Tasks)) 
+          (T0 (constraint Tasks))
+     (return-from update-action-values (values Plan Tasks current-state substitution T0))) 
+   )
+ 
+ ;; unify methods and update state from nonprimitive task
+ (defun update-nonprimitive-task (Plan methods current-task substitution Tasks current-state T0)
+   ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
+   ; and m and θ are as general as possible} 
+   ;;TODO: welche Funktion hier für methods?
+   (let* (Methods-lst (method-unifier methods current-task)) ; {(m . theta)...}  
+        (cond ((null Methods-lst) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
+              ;; TODO: Frage, müsste es hier nicht andersherum sein, wir werten erst aus und fangen dann von vorne an?
+			  ;; Bzw. durch while-Schleife müssen wir gar nicht von vorne anfangen, sondern nur die entsprechenden Variablen anpassen (T0, Tasks, Plan)
+			  (t  (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ; else, from begin
+                    (update-nonprimitive-values Methods-lst current-state Plan Tasks substitution))) ; nondeterministically choose a pair (m, θ) ∈ M
+                                   ) 
+                                       ))
+   )
+ 
+ (defun update-nonprimitive-values (Methods-lst current-state Plan Tasks substitution)
+   (let* ((ms (car Methods-lst))
+          (Tasks (cdr Tasks)) ; modify T by removing t, (removin in constraint-lists happens later through constraining with subtasks!
+          (subm (hddl:hddl-method-subtasks ms))
+		  (theta (cdr ms)))
+		  ; in sub(m) to precede the tasks that t preceded
+		  (setq subtasks (task-substitute theta subm)
+			;; TODO: when constraining, search for current-task and replace it with subtasks! Subtasks themselves should already have constraints from reading-in of subtasks
+				Tasks (add-constraints Tasks subm) ) ;;constraining each task 
+		  (push subm Tasks)))))  ;;adding sub(m), constraining each task     
+     (if (not (null subm)) (setq T0 (constraint subm))
+         (setq T0 constraint(Tasks)))
+     (return-from update-nonprimitive-values (values Plan Tasks current-state substitution T0))
+   )
+  )
+
+
+
+
+#|
 ;-----------------------------
 ;;;; global variables for the shop2-operator
 ;; initialized plan
@@ -76,7 +214,9 @@
                                    (cond ((subtasks) (setq T0 (constraint subtasks)))
                                          (t  (setq T0 (constraint Tasks)))))
                           )))))
-                                       
+   
+|#
+;--------------------------------------   
 ; constraint T to T0 
 ;; Alisa: muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
 ;; ich würde ganz am Anfang des Codes für jede task in Tsk eine leere Liste erstellen, die die constraints enthält,
@@ -90,6 +230,7 @@
 			(push task t0)))
       (reverse t0)))
 
+;----------------------------------------------
 
 ;; für alle eingegebenen Aktionen prüfe, ob die preconditions einer Aktion im aktuellen Status erfüllt sind, falls ja, füge sie in Ergebnisliste ein
 ;; preconditions sind dann erfüllt, wenn sie im aktuellen Status enthalten sind
@@ -107,6 +248,8 @@
         (push a satisfying_actions)))
   (reverse satisfying_actions))))   
 
+;-------------------------------------------------
+
 ;;unnötig? bei uns keine preconditions
 (defun method-satisfyp (m state)
   (let ((method-satisfied nil))
@@ -115,13 +258,16 @@
           ((not (null (find ((hddl-method-preconditions (car m)) state)))) (setq method-satisfied (push (car m) method-satisfied))))
       (setq m (cdr m))
     )))
-  
+ 
+;------------------------------------------------------------------ 
 ;; removes tasks that have been finished by adding actions to the plan from the Tasks list, and from every task-constraint-list in Tasks
-(defun remove-for-all-tasks (current-task Tasks)
-  ;;TODO!
-  (print current-task)
-  (print Tasks)
+(defun remove-task (current-task tasks)
+  (setq tasks (remove current-task tasks))
+  (loop for (task constraint) in tasks do
+	(setq constraint (remove current-task constraint)))
+  (tasks)
   )
+;--------------------------------------------------------------
  
 ;;unifier sollte am besten 
 ;;1. alle actionen sammeln, die den gleichen Namen haben wie die task
@@ -159,7 +305,7 @@
 	       (push (cons a theta) unified_actions))))) ;;push the action and related theta to the result-list
     (reverse unified_actions)))
 
-
+;--------------------------------------------------------
 ;; unify-m 
 ; prueft, ob die Laenge der Parameters gleich
 ; prueft, ob Typen der Parameters gleich
@@ -182,7 +328,7 @@
     )
   )
 )
-
+;------------------------------------------------------
 ;;substitution: muss alle Variablen in action entsprechend Theta substituieren
 ;; reminder: elements of theta: (?v . (truck . vehicle)) -> (variable.(entity.type))
 
@@ -217,15 +363,15 @@
 		  (setq x (car (cdr sub))))))))))
 	   
 		  
-		 
+;------------------------------------------------		 
 
 (defun task-substitute (theta Tasks)
 ;TODO
   )
 
 
-
-;; Alisa: hier würde ich denke ich (defun modify (status action) schreiben, damit wir den aktuellen
+;-------------------------------------------------------------------
+;;hier würde ich denke ich (defun modify (status action) schreiben, damit wir den aktuellen
 ;; Status auch mitübergeben, den wir dann verändern
 ;; dafür würde ich 
 ;; 1. durch die current-status-Liste iterieren und für alle negativen Effekte der Aktion herauslöschen
@@ -240,9 +386,7 @@
       (cons new-status addeffect)
       new-status))
        
-; ; modify action
-; (defun modify (action)
-  ; )
+
   
 ;; failure handling
 ;-------------------------------------------------------------
