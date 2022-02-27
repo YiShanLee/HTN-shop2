@@ -126,8 +126,8 @@ working with
 		  (setq subtasks (task-substitute theta subm)
 			;; TODO: when constraining, search for current-task and replace it with subtasks! Subtasks themselves should already have constraints from reading-in of subtasks
 				Tasks (add-constraints Tasks subm) ) ;;constraining each task 
-		  (push subm Tasks)))))  ;;adding sub(m), constraining each task     
-     (if (not (null subm)) (setq T0 (constraint subm))
+     (push subm Tasks)))))  ;;adding sub(m), constraining each task
+(if (not (null subm)) (setq T0 (constraint subm))
          (setq T0 constraint(Tasks)))
      (return-from update-nonprimitive-values (values Plan Tasks current-state substitution T0))
    )
@@ -265,7 +265,7 @@ working with
   (setq tasks (remove current-task tasks))
   (loop for (task constraint) in tasks do
 	(setq constraint (remove current-task constraint)))
-  (tasks)
+  tasks
   )
 ;--------------------------------------------------------------
  
