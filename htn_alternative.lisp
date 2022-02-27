@@ -263,8 +263,10 @@ working with
 ;; removes tasks that have been finished by adding actions to the plan from the Tasks list, and from every task-constraint-list in Tasks
 (defun remove-task (current-task tasks)
   (setq tasks (remove current-task tasks))
-  (loop for (task constraint) in tasks do
-	(setq constraint (remove current-task constraint)))
+(loop for task in tasks do
+(let ((constraints (hddl:hddl-task-constraints task)))
+(setf constraint (remove current-task constraints)
+      (hddl:hddl-task-constraint task) constraints)))
   tasks
   )
 ;--------------------------------------------------------------
