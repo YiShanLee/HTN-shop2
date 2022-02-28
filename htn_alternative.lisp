@@ -8,12 +8,16 @@ working with
 3. print status for current-standpoint 
 4. run read input
 |#
-;-------------------------------------------
+					;-------------------------------------------
+
+
+
 ;; main stream of shop2
 (defun main-operator ()
   (read-input)
   (shop2-plan)
   )
+
 (defun read-input (&optional (domain-path "domain.hddl") (problem-path "problem.hddl"))
 (unless domain-path (setq domain-path "domain.hddl" "problem.hddl"))
   (princ "Enter domain file")
@@ -21,40 +25,39 @@ working with
   (princ "Enter problem file")
   (setq problem-path (string(read)))
   ;; global variables from domain knowledge and problem.hddl
+  (fetch-inital-state domain-path problem-path))
+ 
+
+(defun fetch-initial-state (domain-path problem-path)
   (defparameter *domain* (hddl:read-hddl-domain domain-path))
-  (defparameter *problem* (hddl:read-hddl-problem problem-path)))
+(defparameter *problem* (hddl:read-hddl-problem problem-path))
+(defparameter *T0* '())
+(defparameter *Plan* '())
+(defparameter *actions*  (hddl:hddl-domain-actions *domain*))
+(defparameter *methods*  (hddl:hddl-domain-methods *domain*))
+(defparameter *current-task*)
+(defparameter *current-status* (hddl:hddl-problem-init-status *problem*) 
+(defparameter *Tasks* (Hddl:hddl-problem-tasks *problem*))
 
 ;--------------------------------------------
 ;; main method for first layer of shop2
 (defun shop2-plan(&optional plan tasks state substitution T0)
-  (let* (
-   (tasks (Hddl:hddl-problem-tasks *problem*))
-   (current-state (hddl:hddl-problem-init-status *problem*))
-   (Plan plan);;P = the empty plan
-   (methods (hddl:hddl-domain-methods *domain*)) 
-   (actions (hddl:hddl-domain-actions *domain*))
-   (T0 (constraint(tasks)));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
-   (substitution substitution) ;; warum substitution?
-   ) 
-    
-	(loop while (not (null T0)) do
-		(if (null tasks) (return Plan))
-        (setq current-task (car T0)
-			  T0 (cdr T0))
-		(resolve-task *domain* *problem* current-state Plan methods actions T0 current-task substitution tasks)
-	;; Frage: müssen wir domain und problem als globale Variablen überhaupt übergeben
-	;; müssen wir T0 übergeben, wenn wir hier loopen?
+  (setq *T0* (constraint));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
+  	(loop while (not (null *T0*)) do
+		(if (null *Tasks*) (return *Plan*))
+        (setq *current-task* (car *T0*)
+			  *T0* (cdr *T0*))
+		(resolve-task)
 	)))
   
 ;; second layer of shop2 
 ;; check primitive and restore the plan 
-(defun resolve-task (domain problem current-state Plan methods actions T0 current-task substitution Tasks) 
-  (if (primitivep current-task actions)
+(defun resolve-task ()
+  (if (primitivep *current-task* *actions*)
     ; primitive (true)
-	;Frage: warum substitution, nötig?
-    (update-primitive-task Plan actions current-task substitution Tasks current-state T0) ;todo handle return value from function
+    (update-primitive-task) ;todo handle return value from function
     ; non-primitive (nil)  
-    (update-nonprimitive-task Plan methods current-task substitution Tasks current-state T0) ;todo handle return value from function
+    (update-nonprimitive-task ) ;todo handle return value from function
     )
 )
 
@@ -69,153 +72,57 @@ working with
  
  ;; third layer of shop2
  ;; unify action and update state from primitive task
- (defun update-primitive-task (Plan actions current-task substitution Tasks current-state T0)
+ (defun update-primitive-task ()
    ;;A ← {(a, θ) : a is a ground instance of an operator in D, θ is a substitution that unifies {head(a), t}, and s satisfies a’s preconditions}
-   (let* ((unifying_actions (action-unifier actions current-task))
-          (Actions-lst (action-satisfyp unifying_actions current-state)))
+   (let* ((unifying_actions (action-unifier *actions* *current-task*))
+          (Actions-lst (action-satisfyp *unifying_actions* *current-state*)))
                       (cond ((null Actions-lst) (return-from update-primitive-task nil))
-                                         
-										 ;; TODO: Frage, müsste es hier nicht andersherum sein, wir werten erst aus und fangen dann von vorne an?
-			  ;; Bzw. durch while-Schleife müssen wir gar nicht von vorne anfangen, sondern nur die entsprechenden Variablen anpassen (T0, Tasks, Plan)
-			
-										 (t (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ;return updated list
-                                              (update-action-values Actions-lst current-state Plan Tasks substitution))
-                                                 ))
-                                         ))
-   )
+		       (t (update-action-values (car Action-lst))))))
+                                                
  
- (defun update-action-values (actions state Plan Tasks substitution)
+ (defun update-action-values (action)
  ;;nondeterministically choose a pair (a, θ) ∈ A -> choose first action
-   (let* ((act (car Action-lst)) 
-           (theta (cdr act)))
+   (let* ((theta (cdr action)))
 		   ;;apply θ action
 		   ;TODO: write function substitute!
-          (setq act (act-substitute theta action)
+          (setq action (act-substitute theta action)
 		  ;;modify s by deleting del(a) and adding add(a)
-                current-state (modify-status current-state act)) 
+               *current-state* (modify-status *current-state* action)) 
 			;;append a to P
-          (push act Plan))
+          (push action *Plan*))
 		  ;; modify T by removing t and applying theta
-		(setq Tasks (task-substitute theta Tasks)
-          (Tasks (remove-task current-task Tasks)) 
-          (T0 (constraint Tasks))
-     (return-from update-action-values (values Plan Tasks current-state substitution T0))) 
+		(setq *Tasks* (task-substitute theta *Tasks*)
+          (*Tasks* (remove-task *current-task* *Tasks*)) 
+          (*T0* (constraint))
+     (return-from update-action-values (values *Plan* *Tasks* *current-state* theta *T0*))) 
    )
  
  ;; unify methods and update state from nonprimitive task
- (defun update-nonprimitive-task (Plan methods current-task substitution Tasks current-state T0)
+ (defun update-nonprimitive-task ()
    ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
    ; and m and θ are as general as possible} 
    ;;TODO: welche Funktion hier für methods?
-   (let* (Methods-lst (method-unifier methods current-task)) ; {(m . theta)...}  
-        (cond ((null Methods-lst) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
-              ;; TODO: Frage, müsste es hier nicht andersherum sein, wir werten erst aus und fangen dann von vorne an?
-			  ;; Bzw. durch while-Schleife müssen wir gar nicht von vorne anfangen, sondern nur die entsprechenden Variablen anpassen (T0, Tasks, Plan)
-			  (t  (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ; else, from begin
-                    (update-nonprimitive-values Methods-lst current-state Plan Tasks substitution))) ; nondeterministically choose a pair (m, θ) ∈ M
-                                   ) 
-                                       ))
-   )
+   (let* (Methods-lst (method-unifier *methods* *current-task*)) ; {(m . theta)...}  
+     (cond ((null Methods-lst) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
+	   (t (update-nonprimitive-values (car Methods-lst)))))) ; nondeterministically choose a pair (m, θ) ∈ M
+
  
- (defun update-nonprimitive-values (Methods-lst current-state Plan Tasks substitution)
-   (let* ((ms (car Methods-lst))
-          (Tasks (cdr Tasks)) ; modify T by removing t, (removin in constraint-lists happens later through constraining with subtasks!
-          (subm (hddl:hddl-method-subtasks ms))
-		  (theta (cdr ms)))
-		  ; in sub(m) to precede the tasks that t preceded
-		  (setq subtasks (task-substitute theta subm)
-			;; TODO: when constraining, search for current-task and replace it with subtasks! Subtasks themselves should already have constraints from reading-in of subtasks
-				Tasks (add-constraints Tasks subm) ) ;;constraining each task 
-     (push subm Tasks)))))  ;;adding sub(m), constraining each task
-(if (not (null subm)) (setq T0 (constraint subm))
-         (setq T0 constraint(Tasks)))
-     (return-from update-nonprimitive-values (values Plan Tasks current-state substitution T0))
-   )
-  )
+ (defun update-nonprimitive-values (method)
+   (setq *Tasks* (cdr *Tasks*) ; modify T by removing t, (removin in constraint-lists happens later through constraining with subtasks!
+	 subm (hddl:hddl-method-subtasks (car method))
+	 theta (cadr method); in sub(m) to precede the tasks that t precede
+	 subm (task-substitute theta subm)
+	 ;; TODO: when constraining, search for current-task and replace it with subtasks! Subtasks themselves should already have constraints from reading-in of subtasks
+	 *Tasks* (add-constraints subm)) ;;constraining each task 
+     (push subm *Tasks*)  ;;adding sub(m)
+(if (not (null subm)) (setq *T0* (constraint subm))
+         (setq *T0* (constraint)))
+     (return-from update-nonprimitive-values (values *Plan* *Tasks* *current-state* *substitution* *T0*)))
 
 
 
 
-#|
-;-----------------------------
-;;;; global variables for the shop2-operator
-;; initialized plan
-(defparameter *Plan* '())
 
-;; list of actions 
-(defparameter *a* '())
-
-;; t for task without constraint to precede t in T
-(defparameter T0 '()) ; task constraint
-; (defparameter *unifier* '()) ;a association of variables that shows current state
-(defparameter *current-state* ()) ; the updated state from current position
-;------------------------------------------------------------ 
-
-(defun shop2-operator(domain-file problem-file)
-
-  (let* ((domain (hddl:read-hddl-domain domain-file)) ;; read domain-file -> domain structure
-	 (problem (hddl:read-hddl-problem problem-file)) ;;read problem-file -> problem-structure
-	 (Tasks (hddl:hddl-problem-tasks problem)) ;;our tasks to be solved come from the problem-file
-	 (current-state (hddl:hddl-problem-init-status problem))
-	 (Plan);;P = the empty plan
-         (methods (hddl:hddl-domain-methods domain)) 
-	 (actions (hddl:hddl-domain-actions domain))
-	 (T0 (constraint Tasks));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
-	 (current-task)) 
-
-    (loop 
-        (if (null Tasks)(return Plan)) ;;if T = empty then return P
-      (setq current-task (car T0)) ;;nondeterministically choose any t € T0
-
-           ;;if t is a primitive task then
-      (cond ((eq (hddl:hddl-action-name-p (hddl:hddl-task-name current-task))
-	     ;;A ← {(a, θ) : a is a ground instance of an operator in D, θ is a substitution that unifies {head(a), t}, and s satisfies a’s preconditions}
-             (let* ((unifying_actions (action-unifier actions current-task))
-		    (Action-lst (action-satisfyp unifying_actions current-state)))
-	       
-               ;;if A = empty then return failure
-	       (cond ((null Action-lst) (error "There is no action that can be executed at this point! Please check your hddl-files and make sure that your tasks can be solved!"))
-		    
-		     ;;nondeterministically choose a pair (a, θ) ∈ A
-		     (t (let* ((act (car Action-lst))
-			      (theta (cdr act)))
-			  ;;apply θ action
-			  ;TODO: write function substitute!
-			  (setq act (act-substitute theta action)
-				;;modify s by deleting del(a) and adding add(a)
-				current-state (modify-status current-state act))
-			  ;;append a to P
-			   (push act Plan)   
-			    ;; modify T by removing t and applying theta
-			  (setq	Tasks (task-substitute theta Tasks)
-			   Tasks (remove-for-all-tasks current-task Tasks)) ;TODO function zusätzlich müssten wir dann auch schauen, dass wir die task aus allen task constraint-Listen löschen!
-			   ))) 
-	       
-                     ;; T0 ← {t ∈ T : no task in T is constrained to precede t}
-               (setq T0 (constraint Tasks))))
-	    
-              ; compound tasks
-            (t
-	     ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
-            ; and m and θ are as general as possible}  ;;TODO: how to make it as general as possible? Wir haben keine Preconditions!
-             (let ((Methods-lst (method-unifier methods current-task current-state)))		    
-                       ; if M = empty then return failure
-                     (cond ((null Methods-lst)(error "There is no method that can be executed at this point! Please check your hddl-files and make sure that your tasks can be solved!"))
-			 ; nondeterministically choose a pair (m, θ) ∈ M
-			   (t (let* ((selected-method (car Methods-lst))
-				     (subtasks (hddl:hddl-method-subtasks selected-method))
-				     (theta (cdr selected-method)))
-                          ; modify T by removing t, adding sub(m), constraining each task in sub(m) to precede the tasks that t preceded
-                                (setq Tasks (remove-for-all-tasks current-task Task)
-				      Tasks (add-constraints Tasks subtasks)
-				      subtasks (task-substitute theta subtasks))
-				(push subtasks Tasks)))))  
-                                   ; if sub(m) is not empty then T0 ← {t ∈ sub(m) : no task in T is constrained to precede t}
-                                   (cond ((subtasks) (setq T0 (constraint subtasks)))
-                                         (t  (setq T0 (constraint Tasks)))))
-                          )))))
-   
-|#
 ;--------------------------------------   
 ; constraint T to T0 
 ;; Alisa: muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
@@ -223,14 +130,31 @@ working with
 ;; dann müssten hier nur prüfen, ob die constraints leer sind oder nicht
 ;; dann müssen wir bei den Methoden dran denken, dass die constraints bei den Subtasks eingefügt werden müssen
 
-(defun constraint(tasks)
-  (let ((t0))
-      (loop for task in tasks do
+(defun constraint(&optional tasks)
+(let ((tasklist (if tasks (setq tasklist tasks)(setq tasklist *Tasks*))))
+      (loop for task in tasklist do
 		(if (null (hddl:hddl-task-constraints task)) 
-			(push task t0)))
-      (reverse t0)))
+			(push task *T0*)))
+      (reverse *T0*))
 
-;----------------------------------------------
+ 	;----------------------------------------------
+(defun add-constrains (subtasks)
+;; gehe durch alle constraint-lists und ersetze *current-task* durch subtasks
+  )
+
+  ;------------------------------------------------------------------ 
+;; removes tasks that have been finished by adding actions to the plan from the Tasks list, and from every task-constraint-list in Tasks
+(defun remove-task (current-task tasks)
+  (setq tasks (remove current-task tasks))
+(loop for task in tasks do
+(let ((constraints (hddl:hddl-task-constraints task)))
+(setf constraint (remove current-task constraints)
+      (hddl:hddl-task-constraint task) constraints)))
+  tasks
+  )
+;--------------------------------------------------------------
+ 
+;---------------------
 
 ;; für alle eingegebenen Aktionen prüfe, ob die preconditions einer Aktion im aktuellen Status erfüllt sind, falls ja, füge sie in Ergebnisliste ein
 ;; preconditions sind dann erfüllt, wenn sie im aktuellen Status enthalten sind
@@ -259,18 +183,7 @@ working with
       (setq m (cdr m))
     )))
  
-;------------------------------------------------------------------ 
-;; removes tasks that have been finished by adding actions to the plan from the Tasks list, and from every task-constraint-list in Tasks
-(defun remove-task (current-task tasks)
-  (setq tasks (remove current-task tasks))
-(loop for task in tasks do
-(let ((constraints (hddl:hddl-task-constraints task)))
-(setf constraint (remove current-task constraints)
-      (hddl:hddl-task-constraint task) constraints)))
-  tasks
-  )
-;--------------------------------------------------------------
- 
+
 ;;unifier sollte am besten 
 ;;1. alle actionen sammeln, die den gleichen Namen haben wie die task
 ;;2. prüfen, ob die gleiche Anzahl Parameter vorliegt (Länge der Liste)
