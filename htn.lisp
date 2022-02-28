@@ -1,10 +1,9 @@
 ;-------------------------------------------
 #|shop2.todo
 ## TODO:
-1. while loop inside shop2-plan
-2. debug method unifier and satisfy & primitive task & non primitive task functions
-3. print status for current-standpoint 
-4. run read input
+1. debug action unifier and satisfy & primitive task & non primitive task functions
+2. print status for current-standpoint 
+3. run read input
 |#
 ;-------------------------------------------
 ;; main stream of shop2
@@ -26,38 +25,37 @@
   (defparameter *domain* (read-hddl-domain domain-file))
   (defparameter *problem* (read-hddl-problem problem-file))
   )
+(defparameter *depth* 0)
 ;--------------------------------------------
 ;; main method for first layer of shop2
-(defun shop2-plan(&optional plan tasks state substitution T0)
+(defun shop2-plan(*depth* &optional plan1 tasks1 state1 substitution1 T0)
   (let* (
-   (tasks (hddl-problem-tasks *problem*))
-   (current-state (hddl-problem-init-status *problem*))
-   (Plan plan);;P = the empty plan
+   (tasks (if (eq depth 0)(hddl-problem-tasks *problem*) tasks1))
+   (current-state (if (eq depth 0)(hddl-problem-init-status *problem*) state1))
+   (Plan (if (eq depth 0) nil plan1));;P = the empty plan
    (methods (hddl-domain-methods *domain*)) 
    (actions (hddl-domain-actions *domain*))
-   (T0 (constraint(tasks)));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
-   (substitution substitution)
+   ; (T0 (constraint(tasks)));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
+   (substitution (if (eq depth 0) nil substitution1))
+   (depth (incf depth))
    ) 
-    ;; while loop vorschlag
-;         (while (not (null T0) do
-; (let task (car T0) T0 (cdr T0)
-
-    (dotimes (current-num (length T0))
-          (unless (length tasks) (return Plan))
-          (setq current-task (nth current-num T0))
-        (resolve-task domain problem current-state Plan methods actions T0 current-task substitution Tasks)
-      )
+   ; (print tasks)
+   ; (print current-state)
+   (setq T0 (constraint tasks)) ;; **remove the return value of T0, on the other hand, renew T0 direct through tasks
+    (do* ((tasks T0 (rest tasks))
+          (current-task (first tasks) (resolve-task depth domain problem current-state Plan methods actions T0 current-task substitution Tasks)))
+         ((null tasks)(planner-output Plan)))
     )
   )
   
 ;; second layer of shop2 
 ;; check primitive and restore the plan 
-(defun resolve-task (domain problem current-state Plan methods actions T0 current-task substitution Tasks) 
+(defun resolve-task (depth domain problem current-state Plan methods actions T0 current-task substitution Tasks) 
   (if (primitivep current-task)
     ; primitive (true)
-    (update-primitive-task Plan actions current-task substitution Tasks current-state T0) ;todo handle return value from function
+    (update-primitive-task depth Plan actions current-task substitution Tasks current-state T0) ;todo handle return value from function
     ; non-primitive (nil)  
-    (update-nonprimitive-task Plan methods current-task substitution Tasks current-state T0) ;todo handle return value from function
+    (update-nonprimitive-task depth Plan methods current-task substitution Tasks current-state T0) ;todo handle return value from function
     )
 )
   
@@ -70,17 +68,17 @@
  
  ;; third layer of shop2
  ;; unify action and update state from primitive task
- (defun update-primitive-task (Plan actions current-task substitution Tasks current-state T0)
+ (defun update-primitive-task (depth Plan actions current-task substitution Tasks current-state T0)
    (let* ((unifying_actions (action-unifier actions current-task))
           (Actions-lst (action-satisfyp unifying_actions current-state)))
                       (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
-                                         (t (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ;return updated list
-                                              (update-action-values Actions-lst current-state Plan Tasks substitution))
+                                         (t (shop2-plan (multiple-value-bind (depth plan tasks state substitution T0) ;return updated list
+                                              (update-action-values depth Actions-lst current-state Plan Tasks substitution))
                                                  ))
                                          ))
    )
  
- (defun update-action-values (actions state Plan Tasks substitution)
+ (defun update-action-values (depth actions state Plan Tasks substitution)
    (let* ((act (car Action-lst)) 
            (theta (cdr act)))
           (setq act (act-substitute theta action)
@@ -89,27 +87,27 @@
           (Tasks (remove-task current-task Tasks)) ;TODO function ;;Alisa: zusätzlich müssten wir dann auch schauen, dass wir die task aus allen task constraint-Listen löschen!
           (T0 (constraint(Tasks)))
           (substitution (substitute (act current-task))))
-     (return-from update-action-values (values Plan Tasks current-state substitution T0) )) 
+     (return-from update-action-values (values depth Plan Tasks current-state substitution T0) )) 
    )
  
  ;; unify methods and update state from nonprimitive task
- (defun update-nonprimitive-task (Plan methods current-task substitution Tasks current-state T0)
+ (defun update-nonprimitive-task (depth Plan methods current-task substitution Tasks current-state T0)
    (let* (Methods-lst (method-satisfy methods current-task)) ; {(m . theta)...}  
         (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
-              (t  (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ; else, from begin
-                    (update-nonprimitive-values Methods-lst current-state Plan Tasks substitution))) ; nondeterministically choose a pair (m, θ) ∈ M
+              (t  (shop2-plan (multiple-value-bind (depth plan tasks state substitution T0) ; else, from begin
+                    (update-nonprimitive-values depth Methods-lst current-state Plan Tasks substitution))) ; nondeterministically choose a pair (m, θ) ∈ M
                                    ) 
                                        ))
    )
  
- (defun update-nonprimitive-values (Methods-lst current-state Plan Tasks substitution)
-   (let* ((ms (car Methods-lst))
+ (defun update-nonprimitive-values (depth Methods-lst current-state Plan Tasks substitution)
+   (let* ((ms (first Methods-lst))
           (Tasks (remove-task current-task Tasks)) ; modify T by removing t, adding sub(m), constraining each task     
           (subm (hddl-method-subtasks (car ms))) ; in sub(m) to precede the tasks that t preceded
-          (substitution (method-substitute (cadr ms))))
+          (substitution (cadr ms)))
      (if (not (null subm)) (setq T0 constraint(subm))
          (setq T0 constraint(Tasks)))
-     (return-from update-nonprimitive-values (values Plan Tasks current-state substitution T0))
+     (return-from update-nonprimitive-values (values depth Plan Tasks current-state substitution T0))
    )
   )
    
@@ -140,32 +138,32 @@
 ;; Ergebnis wäre dann eine Liste mit ((action . theta)(action . theta)...)
 ;; hier würde ich also auch gar nicht jede action einzeln übergeben, sondern gleich alle auf einmal
 
-; (defun action-unifier(actions task)
-;   (let ((same_name)
-;   (unified_actions)
-;   (taskname (hddl:hddl-task-name task));;get name and params of task for easier comparing
-;   (taskparams (hddl:hddl-task-parameters task)))
-;     ;; first for all actions collect only those that have the same name & amount of parameters as the task
-;     (loop for a in actions do
-;       (let ((a-params (hddl:hddl-action-parameters a)))
-;   (if (eq (hddl:hddl-action-name a) taskname)
-;       (if (eq (length taskparams) (length a-params)) ;; then compare types
-;     (push a same_name)))))
-;     ;;then compare if parameters have the same types
-;     (loop for a in same_name do
-;     ;;collect all parameter-types of an action
-;        (let* ((a-params (hddl:hddl-action-parameters a))
-;         (copy-list a-params)
-;         (theta))
-;          ;;loop through the task-parameter-types; whenever the same type is found in the action parameter-type-list, remove it there; if after the loop the a-paramtypes list is empty, the action can be unified with the task, set the parameters of the task as theta
-;    (loop for taskparam in taskparams do
-;      (loop for actionparam in a-params do
-;        (if (eq (cdr taskparam)(cdr actionparam)) ;;if the types are the same
-;      (push (cons (car actionparam)taskparam) theta) ;;push the variable to be substituted and the substitution to theta: (v1? . (truck-0 . VEHICLE))
-;      (remove actionparam copy-list))) ;; remove it from the copied actionparam list
-;      (if (null copy-list)         ;; only if the list is empty both sets of parameters match exactly
-;          (push (cons a theta) unified_actions))))) ;;push the action and related theta to the result-list
-;     (reverse unified_actions)))
+(defun action-unifier(actions task)
+  (let ((same_name)
+  (unified_actions)
+  (taskname (hddl-task-name task));;get name and params of task for easier comparing
+  (taskparams (hddl-task-parameters task)))
+    ;; first for all actions collect only those that have the same name & amount of parameters as the task
+    (loop for a in actions do
+      (let ((a-params (hddl-action-parameters a)))
+  (if (eq (hddl-action-name a) taskname)
+      (if (eq (length taskparams) (length a-params)) ;; then compare types
+    (push a same_name)))))
+    ;;then compare if parameters have the same types
+    (loop for a in same_name do
+    ;;collect all parameter-types of an action
+       (let* ((a-params (hddl-action-parameters a))
+        (copy-list a-params)
+        (theta))
+         ;;loop through the task-parameter-types; whenever the same type is found in the action parameter-type-list, remove it there; if after the loop the a-paramtypes list is empty, the action can be unified with the task, set the parameters of the task as theta
+   (loop for taskparam in taskparams do
+     (loop for actionparam in a-params do
+       (if (eq (cdr taskparam)(cdr actionparam)) ;;if the types are the same
+     (push (cons (car actionparam)taskparam) theta) ;;push the variable to be substituted and the substitution to theta: (v1? . (truck-0 . VEHICLE))
+     (remove actionparam copy-list))) ;; remove it from the copied actionparam list
+     (if (null copy-list)         ;; only if the list is empty both sets of parameters match exactly
+         (push (cons a theta) unified_actions))))) ;;push the action and related theta to the result-list
+    (reverse unified_actions)))
 
 
 ;; für alle eingegebenen Aktionen prüfe, ob die preconditions einer Aktion im aktuellen Status erfüllt sind, falls ja, füge sie in Ergebnisliste ein
@@ -182,22 +180,23 @@
     (setq satisfies nil)))
     (if satisfies
         (push a satisfying_actions)))
+    (print satisfying_actions)
   (reverse satisfying_actions))))   
 ;-------------------------------------------------------------------------
-   ; (defun action-satisfyp (actions current-state)
- ;    (let ((satisfying_actions))  
- ;      (dotimes (curr-num (length actions))
- ;    (let ((preconditions (hddl-action-preconditions (nth curr-num actions)))
- ;        (satisfies T))  ;;set satyisfies to true at first and let it be disproven for every action
- ;    ; (return-from action-satisfyp T)
- ;    (dotimes (curr-p (length preconditions))
- ;      (if (not (find (nth curr-p preconditions) current-state))
- ;    (setq satisfies nil)))
- ;    (if satisfies
- ;        (push a satisfying_actions)))
- ;  (reverse satisfying_actions))
- ;      (return-from action-satisfyp (reverse satisfying_actions))
- ;      ))  
+   ; (defun action-satisfyp1 (actions current-state)
+   ;  (let ((satisfying_actions))  
+   ;    (dotimes (curr-num (length actions))
+   ;  (let ((preconditions (hddl-action-preconditions (nth curr-num actions)))
+   ;      (satisfies T))  ;;set satyisfies to true at first and let it be disproven for every action
+   ;  ; (return-from action-satisfyp T)
+   ;  (dotimes (curr-p (length preconditions))
+   ;    (if (not (find (nth curr-p preconditions) current-state))
+   ;  (setq satisfies nil)))
+   ;  (if satisfies
+   ;      (push a satisfying_actions)))
+   ;  (reverse satisfying_actions))
+   ;    (return-from action-satisfyp1 (reverse satisfying_actions))
+   ;    ))  
 
 ;----------------------------------------------------------------------------
  ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
@@ -217,6 +216,7 @@
           (setq reversed-op-param (mapcar #'reverse op-param))
           (setq binding-list (cons (cons (cadr (assoc (cadr one-set) reversed-op-param)) one-set) binding-list))
           )
+    (format t "step-> parameters-binding with method ~S" (list binding-list))
     (return-from parameters-binding (list binding-list)) ; ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-0 LOCATION))
     )
   )
@@ -236,7 +236,7 @@
             ((same-parameters-p task-params m-params) (return-from method-unifier-p T)))
             (t (return-from method-unifier-p nil)))
   )
-;; ok
+
 (defun same-parameters-p (task-params m-params) ; (TRUCK-0 CITY-LOC-0) / ((?V VEHICLE) (?L2 LOCATION))
   (let ((types (hddl-problem-objects *problem*))
         (task-type nil)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE)
@@ -245,13 +245,16 @@
       (setq task-type (cons (cadr one-set) task-type))
     )
   (setq m-type (cadr (apply #'mapcar #'list m-params))) ;(VEHICLE LOCATION)
-  (setq m-type (sort m-type #'string<))
+  (setq m-type (sort m-type #'string<)) ; sort the ordering to compare string
   (setq task-type (sort task-type #'string<))  
-  (if (equal task-type m-type) (return-from same-parameters-p T) (return-from same-parameters-p nil))
+  (cond
+    ((not (eq (length task-type) (length m-type))) (return-from same-parameters-p nil)) ; quick check and return 
+    ((equal task-type m-type) (return-from same-parameters-p T))
+    (t (return-from same-parameters-p nil)))
   )
   )
 
-;; method-satisfyp 
+;; method-satisfy
 ;; pre(m) to be seen as deprecated tuple
 ;; output: {(method . theta)...}
 (defun method-satisfy (methods task)
@@ -268,63 +271,57 @@
 ;; dafür würde ich 
 ;; 1. durch die current-status-Liste iterieren und für alle negativen Effekte der Aktion herauslöschen
 ;; 2. alle positiven Effekte der Aktion hinzufügen, und das als neuen Status ausgeben lassen:
-  (defun modify-status (status action)
-    (let ((addeffect (hddl-action-poseffect action))
-    (deleffect (hddl-action-negeffect action))
-    (new-status))
-      (loop for e in status do
-  (if (not(find e deleffect))
-      (push e new-status)))
-      (cons new-status addeffect)
-      new-status))
+  
+(defun modify-status (status action)
+(let 
+  ((addeffect (hddl-action-pos-effects action))
+  (deleffect (hddl-action-neg-effects action))
+  (new-status nil))
+    (loop for e in status do
+      (if (not (find e deleffect))
+          (push e new-status)))
+    (setq new-status (cons new-status addeffect))
+  new-status))
 ;------------------------------------------------------------
 ;;; substitution with unifier and replace the required variables within each update
 ;; unify variables 
-(defun action-substitute (action task)
-  
-)
-(defun method-substitute (action task)
-  
-)
+
 ;;substitution: muss alle Variablen in action entsprechend Theta substituieren
 ;; reminder: elements of theta: (?v . (truck . vehicle)) -> (variable.(entity.type))
 
-; ; (defun act-substitute(theta action)
-;   (let* ((a-params (hddl:hddl-action-parameters action))
-;   (a-pos-effects (hddl:hddl-action-pos-effects action))
-;   (a-neg-effects (hddl:hddl-action-neg-effects action)))
-;     ;; for all substitutions
-;     (loop for sub in theta do
-;       ;;parameter-substitution
-;       (loop for param in a-params do
-;   ;;check if first part of parameter matches first part of theta
-;   (if (eq (car sub)(car param))
-;       ;;if so, set parameter to middle part of theta (actual entity)
-;       (setq param (car (cdr sub)))))
+(defun act-substitute(theta action)
+  (let* ((a-params (hddl-action-parameters action))
+  (a-pos-effects (hddl-action-pos-effects action))
+  (a-neg-effects (hddl-action-neg-effects action)))
+    ;; for all substitutions
+    (loop for sub in theta do
+      ;;parameter-substitution
+      (loop for param in a-params do
+  ;;check if first part of parameter matches first part of theta
+  (if (eq (car sub)(car param))
+      ;;if so, set parameter to middle part of theta (actual entity)
+      (setq param (car (cdr sub)))))
       
-;   ;;if pos-effects ist not empty, do the same there
-;   (unless (null a-pos-effects)
-;     (loop for effect in a-pos-effects do
-;       ;;for every part of the effect (looks like this: (AT ?V ?L1)) check if it
-;       ;; can be found in theta, if yes substitute
-;       (loop for x in (cdr effect) do
-;         (if (eq (car sub) x)
-;       (setq x (car (cdr sub)))))))
-;      ;;if neg-effects ist not empty, do the same there
-;   (unless (null a-neg-effects)
-;     (loop for effect in a-neg-effects do
-;       ;;for every part of the effect (looks like this: (AT ?V ?L1)) check if it
-;       ;; can be found in theta, if yes substitute
-;       (loop for x in (cdr effect) do
-;         (if (eq (car sub) x)
-;       (setq x (car (cdr sub))))))))))
+  ;;if pos-effects ist not empty, do the same there
+  (unless (null a-pos-effects)
+    (loop for effect in a-pos-effects do
+      ;;for every part of the effect (looks like this: (AT ?V ?L1)) check if it
+      ;; can be found in theta, if yes substitute
+      (loop for x in (cdr effect) do
+        (if (eq (car sub) x)
+      (setq x (car (cdr sub)))))))
+     ;;if neg-effects ist not empty, do the same there
+  (unless (null a-neg-effects)
+    (loop for effect in a-neg-effects do
+      ;;for every part of the effect (looks like this: (AT ?V ?L1)) check if it
+      ;; can be found in theta, if yes substitute
+      (loop for x in (cdr effect) do
+        (if (eq (car sub) x)
+      (setq x (car (cdr sub))))))))))
      
       
      
 
-(defun task-substitute (theta Tasks)
-;TODO
-  )
 ;-------------------------------------------------------------
 ; remove task from task list
 (defun remove-task (current-task tasks)
@@ -332,7 +329,7 @@
   (return-from remove-task tasks)
   )
 ;-------------------------------------------------------------
-;; failure handling
+; ; failure handling
 ; (define-condition failure-handling (err)
 ;   ((actual-input :initarg :actual-input
 ;                  :reader actual-input
@@ -341,6 +338,8 @@
 ;              (format stream "~a is null!"
 ;                      (actual-input condition)))))
 ;-------------------------------------------------------------
+(defun planner-output (plan)
+  (format t "Shop2-operator finds current possible plan as ~S" plan))
 ;;; illustration from thesis
 #|
 The first case is if t is primitive, i.e., 
