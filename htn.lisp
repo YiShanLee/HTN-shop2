@@ -25,11 +25,11 @@
 (defun fetch-initial-state (domain-file problem-file)
   (defparameter *domain* (read-hddl-domain domain-file))
   (defparameter *problem* (read-hddl-problem problem-file))
-  (defparameter *depth* 0)
+  (defparameter *current-state* nil)
   )
 ;--------------------------------------------
 ;; main method for first layer of shop2
-(defun shop2-plan(*depth* &optional plan1 tasks1 state1 substitution1 T0)
+(defun shop2-plan(&optional plan1 tasks1 state1 substitution1 T0)
   (let* (
    (tasks (if (eq depth 0)(hddl-problem-tasks *problem*) tasks1))
    (current-state (if (eq depth 0)(hddl-problem-init-status *problem*) state1))
@@ -38,7 +38,6 @@
    (actions (hddl-domain-actions *domain*))
    ; (T0 (constraint(tasks)));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
    (substitution (if (eq depth 0) nil substitution1))
-   (depth (incf depth))
    ) 
    ; (print tasks)
    ; (print current-state)
@@ -51,12 +50,12 @@
   
 ;; second layer of shop2 
 ;; check primitive and restore the plan 
-(defun resolve-task (depth domain problem current-state Plan methods actions T0 current-task substitution Tasks) 
+(defun resolve-task (domain problem current-state Plan methods actions T0 current-task substitution Tasks) 
   (if (primitivep current-task)
     ; primitive (true)
-    (update-primitive-task depth Plan actions current-task substitution Tasks current-state T0) ;todo handle return value from function
+    (update-primitive-task Plan actions current-task substitution Tasks current-state T0) ;todo handle return value from function
     ; non-primitive (nil)  
-    (update-nonprimitive-task depth Plan methods current-task substitution Tasks current-state T0) ;todo handle return value from function
+    (update-nonprimitive-task Plan methods current-task substitution Tasks current-state T0) ;todo handle return value from function
     )
 )
   
@@ -69,45 +68,45 @@
  
  ;; third layer of shop2
  ;; unify action and update state from primitive task
- (defun update-primitive-task (depth Plan actions current-task substitution Tasks current-state T0)
+ (defun update-primitive-task (Plan actions current-task substitution Tasks current-state T0)
    (let ((Actions-lst (action-satisfier actions current-task current-state)))
                       (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
-                                         (t (shop2-plan (multiple-value-bind (depth plan tasks state substitution T0) ;return updated list
-                                              (update-action-values depth Actions-lst current-state Plan Tasks substitution))
+                                         (t (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ;return updated list
+                                              (update-action-values Actions-lst current-state Plan Tasks substitution))
                                                  ))
                                          ))
    )
  
- (defun update-action-values (depth actions state Plan Tasks substitution)
+ (defun update-action-values (actions state Plan Tasks substitution)
    (let* ((act (car Action-lst)) 
            (theta (cdr act)))
           (setq act (act-substitute theta action)
-          (current-state (modify-status current-state act)) 
+          (current-state (modify-state current-state act)) 
           (Plan (cons (car act) Plan))
           (Tasks (remove-task current-task Tasks)) ;TODO function ;;Alisa: zusätzlich müssten wir dann auch schauen, dass wir die task aus allen task constraint-Listen löschen!
           (T0 (constraint(Tasks)))
           (substitution (substitute (act current-task))))
-     (return-from update-action-values (values depth Plan Tasks current-state substitution T0) )) 
+     (return-from update-action-values (values Plan Tasks current-state substitution T0) )) 
    )
  
  ;; unify methods and update state from nonprimitive task
  (defun update-nonprimitive-task (depth Plan methods current-task substitution Tasks current-state T0)
    (let (Methods-lst (method-satisfier methods current-task)) ; {(m . theta)...}  
         (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
-              (t  (shop2-plan (multiple-value-bind (depth plan tasks state substitution T0) ; else, from begin
-                    (update-nonprimitive-values depth Methods-lst current-state Plan Tasks substitution))) ; nondeterministically choose a pair (m, θ) ∈ M
+              (t  (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ; else, from begin
+                    (update-nonprimitive-values Methods-lst current-state Plan Tasks substitution))) ; nondeterministically choose a pair (m, θ) ∈ M
                                    ) 
                                        ))
    )
  
- (defun update-nonprimitive-values (depth Methods-lst current-state Plan Tasks substitution)
+ (defun update-nonprimitive-values (Methods-lst current-state Plan Tasks substitution)
    (let* ((ms (first Methods-lst))
           (Tasks (remove-task current-task Tasks)) ; modify T by removing t, adding sub(m), constraining each task     
           (subm (hddl-method-subtasks (car ms))) ; in sub(m) to precede the tasks that t preceded
           (substitution (cadr ms)))
      (if (not (null subm)) (setq T0 constraint(subm))
          (setq T0 constraint(Tasks)))
-     (return-from update-nonprimitive-values (values depth Plan Tasks current-state substitution T0))
+     (return-from update-nonprimitive-values (values Plan Tasks current-state substitution T0))
    )
   )
    
@@ -132,7 +131,6 @@
 ;       )
 ;     )
 ; )
-;----------------------------------------------------------------------
 
 ;;;parameters-binding (theta-binding)
 ;; input: task & operator (as action or method)
@@ -164,19 +162,19 @@
 ;; pass to next function as method-satisfier 
 (defun operator-unifier-p (operator task)
   (let ((op-task-name (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-name operator) (first (hddl-method-task operator))))
-        (op-params (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-parameters operator)(hddl-method-parameters operator)))
+        (op-params (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-parameters operator) (rest (hddl-method-task operator))))
         (task-name (hddl-task-name task))
         (task-params (hddl-task-parameters task))
         )
-      (cond ((and (eql (type-of operator) 'HDDL-ACTION) (identical-parameters-p task-params op-params)) (return-from operator-unifier-p T))
-            ((and (eql (type-of operator) 'HDDL-METHOD) (eq task-name op-task-name) (identical-parameters-p task-params op-params)) (return-from operator-unifier-p T))
+      (cond ((and (eql (type-of operator) 'HDDL-ACTION) (a-identical-parameters-p task-params op-params)) (return-from operator-unifier-p T))
+            ((and (eql (type-of operator) 'HDDL-METHOD) (eq task-name op-task-name) (m-identical-parameters-p task-params op-params)) (return-from operator-unifier-p T))
             (t (return-from operator-unifier-p nil)))
   ))
-;;; identical-parameters-p
-;; input: task parameters & operator parameters (operator as action or method)
+;;; a-identical-parameters-p
+;; input: task parameters & action parameters (operator as action or method)
 ;; output: True / False
 ;; pass to next function as operator-unifier-p
-(defun identical-parameters-p (task-params op-params) ; (TRUCK-0 CITY-LOC-0) / ((?V VEHICLE) (?L2 LOCATION))
+(defun a-identical-parameters-p (task-params op-params) ; (TRUCK-0 CITY-LOC-0) / ((?V VEHICLE) (?L2 LOCATION))
   (let ((types (hddl-problem-objects *problem*))
         (task-type nil)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE)
   (dotimes (i (length task-params))
@@ -187,10 +185,33 @@
   (setq op-type (sort op-type #'string<)) ; sort the ordering to compare string
   (setq task-type (sort task-type #'string<))  
   (cond
-    ((not (eq (length task-type) (length op-type))) (return-from identical-parameters-p nil)) ; quick check and return 
-    ((equal task-type op-type) (return-from identical-parameters-p T))
-    (t (return-from identical-parameters-p nil)))
+    ((not (eq (length task-type) (length op-type))) (return-from a-identical-parameters-p nil)) ; quick check and return 
+    ((equal task-type op-type) (return-from a-identical-parameters-p T))
+    (t (return-from a-identical-parameters-p nil)))
   )
+)
+
+;;; m-identical-parameters-p
+;; check the value of current-task-parameters & method-task-parameters identical
+;; input: task parameters & method parameters
+;; output: True / False
+;; pass to next function as operator-unifier-p
+
+(defun m-identical-parameters-p (task-params m-task-params) ; (TRUCK-0 CITY-LOC-0) / (?v ?l2)
+  (let ((types (hddl-problem-objects *problem*)) ; ((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
+        (task-type nil))
+    (dotimes (i (length task-params))
+      (setq one-set (assoc (nth i task-params) types)) ;(TRUCK-0 VEHICLE)
+      (setq task-type (cons (char (symbol-name (cadr one-set)) 0) task-type)) ; ("v")
+      )
+    (setq task-type (sort task-type #'string<))  ;("L" "V")
+    (setq m-task-params (mapcar #'(lambda(c) (char c 1)) (mapcar #'symbol-name m-task-params))) ;("V" "L")
+    (setq m-task-params (sort m-task-params #'string<))  ;("L" "V")
+  (cond 
+    ((not (eq (length task-type) (length m-task-params))) (return-from m-identical-parameters-p nil)) ; quick check and return 
+    ((equal task-type m-task-params) (return-from m-identical-parameters-p T))
+    (t (return-from m-identical-parameters-p nil)))
+    )
   )
 
 ;; method-satisfier
@@ -204,24 +225,61 @@
     ) (return-from method-satisfier (values methods-satisfied))
   )
 )
-
-;; Alisa: hier würde ich denke ich (defun modify (status action) schreiben, damit wir den aktuellen
-;; Status auch mitübergeben, den wir dann verändern
-;; dafür würde ich 
-;; 1. durch die current-status-Liste iterieren und für alle negativen Effekte der Aktion herauslöschen
-;; 2. alle positiven Effekte der Aktion hinzufügen, und das als neuen Status ausgeben lassen:
-  
-(defun modify-status (status action)
-(let 
-  ((addeffect (hddl-action-pos-effects action))
-  (deleffect (hddl-action-neg-effects action))
-  (new-status nil))
-    (loop for e in status do
-      (if (not (find e deleffect))
-          (push e new-status)))
-    (setq new-status (cons new-status addeffect))
-  new-status))
-
+;--------------------------------------------------------------
+;;; state CRUD
+;; get-initial-state
+;; init a hash table as a dictionary for current-state 
+;; input: current-state
+;; output: current-state as hash-table
+(defun get-initial-state (current-state) #|((ROAD CITY-LOC-0 CITY-LOC-1) (ROAD CITY-LOC-1 CITY-LOC-0) (ROAD CITY-LOC-1 CITY-LOC-2) (ROAD CITY-LOC-2 CITY-LOC-1)(AT TRUCK-0 CITY-LOC-2))|#
+  (let ((problem-types (hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
+        (state-type (delete-duplicates (car (apply #'mapcar #'list current-state)))) ; (ROAD AT)
+        (current-state-list (make-hash-table))
+        (lis nil)) 
+    (dotimes (i (length state-type))
+     (setf (gethash (nth i state-type) current-state-list) (remove nil (mapcar #'(lambda(c) (if (eq (first c) (nth i state-type)) (rest c))) current-state)))
+     (setq lis nil)
+     )
+    (setq current-state-list *curren-state*)
+    current-state-list)
+  )
+;; get-current-state
+;; check if global variable not null, return *current-state*
+; else initialize *current-state*
+;; output: *current-state*
+(defun get-current-state ()
+  (if (null *current-state*) (get-initial-state (hddl-problem-init-status *problem*))
+      *curren-state*)
+  )
+;; add-state
+(defun add-state (pos-effects) ; (AT ?V ?L2)
+  (dotimes (i (length pos-effects))
+    (setq operator (nth i pos-effects))
+    (if (null (gethash (first operator) *current-state*))
+        (setf (gethash (first operator)) (rest operator))
+        (let ((value1 (gethash (first operator) *current-state*)))
+              (setf (gethash (first operator) *current-state*) (cons (rest operator) value1)))))
+  )
+;; delete-state
+(defun delete-state (neg-effects) ; (AT ?V ?L2)
+  (dotimes (i (length neg-effects))
+    (setq operator (nth i neg-effects))
+    (if (gethash (first operator) *current-state*)
+        (let((value1 (gethash (first operator) *current-state*)))
+            (setf (gethash (first operator) *current-state*) (remove (rest operator) value1))
+          )
+        ))
+  )
+ ;; modify-state
+ (defun modify-state (action)
+   (let ((pos-effects (hddl-action-pos-effects action))
+         (neg-effects (hddl-action-neg-effects action)))
+     (if neg-effects 
+         (delete-state neg-effects))
+     (if pos-effects 
+         (add-state neg-effects))
+     )
+   )    
 
 ;; für alle eingegebenen Aktionen prüfe, ob die preconditions einer Aktion im aktuellen Status erfüllt sind, falls ja, füge sie in Ergebnisliste ein
 ;; preconditions sind dann erfüllt, wenn sie im aktuellen Status enthalten sind
