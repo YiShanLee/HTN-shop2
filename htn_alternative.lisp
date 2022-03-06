@@ -1,12 +1,12 @@
 ;-------------------------------------------
 #|shop2.todo
 ## TODO:
-1. write add-constraint
 3. debug method-satisfy-p
 4. debug method-unifier
 5. write task-substitute
-6. prüfe, dass Methodenname =!= tas-name, sondern task-name im task-slot
-7. nochmal prüfen, ob make-hddl-defstruct wirklich exportiert werden muss
+6. prüfe, dass Methodenname =!= task-name, sondern task-name im task-slot
+
+(7. nochmal prüfen, ob make-hddl-defstruct wirklich exportiert werden muss - gut fürs Testen!)
 |#
 					;-------------------------------------------
 
@@ -123,14 +123,8 @@
 
 
 
-;--------------------------------------   
-; constraint T to T0 
-;; Alisa: muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
-;; ich würde ganz am Anfang des Codes für jede task in Tsk eine leere Liste erstellen, die die constraints enthält,
-;; dann müssten hier nur prüfen, ob die constraints leer sind oder nicht
-;; dann müssen wir bei den Methoden dran denken, dass die constraints bei den Subtasks eingefügt werden müssen
-
-;;if no tasklist is provided, the global tasklist is used as default value
+;--------------------------------------
+;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case; if no tasklist is provided, the global tasklist is used as default value
 (defun constraint(&optional (tasks *Tasks*)) 
       (loop for task in tasks do
 		(if (null (hddl:hddl-task-constraints task)) 
@@ -138,7 +132,7 @@
   (reverse *T0*))
 
  ;----------------------------------------------
- ;; When constraining, search for current-task in all constraint-lists and replace it with subtasks! Subtasks themselves should already have constraints from reading-in of subtasks
+ ;; Searches for current-task in the constraint-slots of all task in global tasklist and replaces it with subtasks; the subtasks themselves are already constrained by each other in where appropriat when the methods are read in 
 (defun add-constraints (subtasks)
 (loop for task in *Tasks* do
   (let ((constraints (hddl:hddl-task-constraints task))
