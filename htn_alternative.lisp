@@ -62,12 +62,13 @@
 )
 
 
-(defun primitivep (task actions)
- (let ((taskname (hddl:hddl-task-name task)))
- (loop for a in actions do
-  (if (eq (hddl:hddl-action-name a) taskname)
-      (return t)))
-     (return nil)))	  
+(defun primitivep (task)
+ (let ((taskname (hddl:hddl-task-name task))
+      (actionname))
+  (loop for a in *actions* do
+    (setq actionname (hddl:hddl-action-name a))
+    (if (equal actionname taskname)
+	(return t)))));;ausreichend, wenn nicht t ausgegeben wird, wird automatisch nil ausgegeben!
 
  
  ;; third layer of shop2
