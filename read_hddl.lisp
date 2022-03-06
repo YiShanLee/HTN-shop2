@@ -3,16 +3,17 @@
   (:use :cl)(:nicknames :read-hddl :hddl)
   (:export read-file read-hddl-domain read-hddl-problem
 	   hddl-predicate-name  hddl-predicate-parameters
-	   hddl-method-name hddl-method-parameters  hddl-method-task hddl-method-subtasks
-	   hddl-method-ordered-subtasks
-	   hddl-action-name hddl-action-name-p hddl-action-parameters hddl-action-preconditions
-	   hddl-action-neg-effects hddl-action-pos-effects
-	   hddl-domain-name hddl-domain-requirements  hddl-domain-types hddl-domain-predicates
-	    hddl-domain-tasks hddl-domain-methods hddl-domain- hddl-domain-actions
-	   hddl-task-name hddl-task-parameters hddl-task-constraints
-	   hddl-object-name hddl-object-type
-	   hddl-problem-name hddl-problem-domain  hddl-problem-objects hddl-problem-tasks
-	    hddl-problem-ordering hddl-problem-constraints hddl-problem-init-status))
+	   make-hddl-method hddl-method-name hddl-method-parameters  hddl-method-task
+	   hddl-method-subtasks hddl-method-ordered-subtasks
+	   make-hddl-action hddl-action-name hddl-action-name-p hddl-action-parameters
+	   hddl-action-preconditions hddl-action-neg-effects hddl-action-pos-effects
+	   make-hddl-domain hddl-domain-name hddl-domain-requirements  hddl-domain-types
+	   hddl-domain-predicates hddl-domain-tasks hddl-domain-methods hddl-domain-actions
+	   make-hddl-task hddl-task-name hddl-task-parameters hddl-task-constraints
+	   make-hddl-object hddl-object-name hddl-object-type
+	   make-hddl-problem hddl-problem-name hddl-problem-domain  hddl-problem-objects
+	   hddl-problem-tasks hddl-problem-ordering hddl-problem-constraints
+	   hddl-problem-init-status))
 (in-package read-hddl-package)
 
 ;;define global variables

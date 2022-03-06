@@ -1,12 +1,12 @@
 ;-------------------------------------------
 #|shop2.todo
 ## TODO:
-0. set T0 as global variable, such that while-loop always uses the T0 we are currently 
-working with
-1. while loop inside shop2-plan
-2. debug method unifier and satisfy & primitive task & non primitive task functions
-3. print status for current-standpoint 
-4. run read input
+1. write add-constraint
+3. debug method-satisfy-p
+4. debug method-unifier
+5. write task-substitute
+6. prüfe, dass Methodenname =!= tas-name, sondern task-name im task-slot
+7. nochmal prüfen, ob make-hddl-defstruct wirklich exportiert werden muss
 |#
 					;-------------------------------------------
 
@@ -19,25 +19,25 @@ working with
   )
 
 (defun read-input (&optional (domain-path "domain.hddl") (problem-path "problem.hddl"))
-(unless domain-path (setq domain-path "domain.hddl" "problem.hddl"))
+  ;;(unless domain-path (setq domain-path "domain.hddl" "problem.hddl"))
   (princ "Enter domain file")
   (setq domain-path (string(read)))
   (princ "Enter problem file")
   (setq problem-path (string(read)))
   ;; global variables from domain knowledge and problem.hddl
-  (fetch-inital-state domain-path problem-path))
+  (fetch-initial-state domain-path problem-path))
  
 
 (defun fetch-initial-state (domain-path problem-path)
   (defparameter *domain* (hddl:read-hddl-domain domain-path))
-(defparameter *problem* (hddl:read-hddl-problem problem-path))
-(defparameter *T0* '())
-(defparameter *Plan* '())
-(defparameter *actions*  (hddl:hddl-domain-actions *domain*))
-(defparameter *methods*  (hddl:hddl-domain-methods *domain*))
-(defparameter *current-task*)
-(defparameter *current-status* (hddl:hddl-problem-init-status *problem*) 
-(defparameter *Tasks* (Hddl:hddl-problem-tasks *problem*))
+  (defparameter *problem* (hddl:read-hddl-problem problem-path))
+  (defparameter *T0* '())
+  (defparameter *Plan* '())
+  (defparameter *actions*  (hddl:hddl-domain-actions *domain*))
+  (defparameter *methods*  (hddl:hddl-domain-methods *domain*))
+  (defparameter *current-task* nil)
+  (defparameter *current-status* (hddl:hddl-problem-init-status *problem*))
+  (defparameter *Tasks* (hddl:hddl-problem-tasks *problem*)))
 
 ;--------------------------------------------
 ;; main method for first layer of shop2
@@ -130,9 +130,9 @@ working with
 ;; dann müssten hier nur prüfen, ob die constraints leer sind oder nicht
 ;; dann müssen wir bei den Methoden dran denken, dass die constraints bei den Subtasks eingefügt werden müssen
 
-(defun constraint(&optional tasks)
-(let ((tasklist (if tasks (setq tasklist tasks)(setq tasklist *Tasks*))))
-      (loop for task in tasklist do
+;;if no tasklist is provided, the global tasklist is used as default value
+(defun constraint(&optional (tasks *Tasks*)) 
+      (loop for task in tasks do
 		(if (null (hddl:hddl-task-constraints task)) 
 			(push task *T0*)))
       (reverse *T0*))
