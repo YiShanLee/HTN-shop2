@@ -113,8 +113,7 @@
 	 subm (hddl:hddl-method-subtasks (car method))
 	 theta (cadr method); in sub(m) to precede the tasks that t precede
 	 subm (task-substitute theta subm)
-	 ;; TODO: when constraining, search for current-task and replace it with subtasks! Subtasks themselves should already have constraints from reading-in of subtasks
-	 *Tasks* (add-constraints subm)) ;;constraining each task 
+	 *Tasks* (add-constraints subm)) ;;constraining each task by replacing the task with its subtasks
      (push subm *Tasks*)  ;;adding sub(m)
 (if (not (null subm)) (setq *T0* (constraint subm))
          (setq *T0* (constraint)))
@@ -136,26 +135,23 @@
       (loop for task in tasks do
 		(if (null (hddl:hddl-task-constraints task)) 
 			(push task *T0*)))
-      (reverse *T0*))
+  (reverse *T0*))
 
- 	;----------------------------------------------
-(defun add-constrains (subtasks)
-;; gehe durch alle constraint-lists und ersetze *current-task* durch subtasks
-  )
+ ;----------------------------------------------
+ ;; When constraining, search for current-task in all constraint-lists and replace it with subtasks! Subtasks themselves should already have constraints from reading-in of subtasks
+(defun add-constraints (subtasks)
+(loop for task in *Tasks* do
+  (let ((constraints (hddl:hddl-task-constraints task))
+	(newconstraints ()))
+    (unless (null constraints)
+      (loop for c in constraints do
+	(if (equalp c *current-task*)
+	    (push subtasks newconstraints)
+	    (push c newconstraints)))
+      (setf (hddl:hddl-task-constraints task) newconstraints)))))
 
-  ;------------------------------------------------------------------ 
-;; removes tasks that have been finished by adding actions to the plan from the Tasks list, and from every task-constraint-list in Tasks
-(defun remove-task (current-task tasks)
-  (setq tasks (remove current-task tasks))
-(loop for task in tasks do
-(let ((constraints (hddl:hddl-task-constraints task)))
-(setf constraint (remove current-task constraints)
-      (hddl:hddl-task-constraint task) constraints)))
-  tasks
-  )
+
 ;--------------------------------------------------------------
- 
-;---------------------
 
 ;; für alle eingegebenen Aktionen prüfe, ob die preconditions einer Aktion im aktuellen Status erfüllt sind, falls ja, füge sie in Ergebnisliste ein
 ;; preconditions sind dann erfüllt, wenn sie im aktuellen Status enthalten sind
