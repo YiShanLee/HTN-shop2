@@ -1,12 +1,9 @@
 ;-------------------------------------------
 #|shop2.todo
 ## TODO:
-3. debug method-satisfy-p
-4. debug method-unifier
-5. write task-substitute
-6. prüfe, dass Methodenname =!= task-name, sondern task-name im task-slot
-
-(7. nochmal prüfen, ob make-hddl-defstruct wirklich exportiert werden muss - gut fürs Testen!)
+1. modify-constraints für actions erweitern
+2. generelles debugging
+3. read-hddl optimiteren
 |#
 					;-------------------------------------------
 
@@ -92,7 +89,7 @@
           (push action *Plan*))
 		  ;; modify T by removing t and applying theta
 		(setq *Tasks* (task-substitute theta *Tasks*)
-          (*Tasks* (remove-task *current-task* *Tasks*)) 
+          (*Tasks* (modify-constraint)) 
           (*T0* (constraint))
      (return-from update-action-values (values *Plan* *Tasks* *current-state* theta *T0*))) 
    )
@@ -111,7 +108,7 @@
 	 subm (hddl:hddl-method-subtasks (car method))
 	 theta (cadr method); in sub(m) to precede the tasks that t precede
 	 subm (task-substitute theta subm)
-	 *Tasks* (add-constraints subm)) ;;constrain tasks with subtasks where appropriate
+	 *Tasks* (modify-constraints subm)) ;;constrain tasks with subtasks where appropriate
      (push subm *Tasks*)  ;;adding sub(m)
 (if (not (null subm)) (setq *T0* (constraint subm))
          (setq *T0* (constraint)))
@@ -123,15 +120,17 @@
 
 ;--------------------------------------
 ;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case; if no tasklist is provided, the global tasklist is used as default value
-(defun constraint(&optional (tasks *Tasks*)) 
+(defun constraint(&optional (tasks *Tasks*))
+(setq *T0* nil)
       (loop for task in tasks do
 		(if (null (hddl:hddl-task-constraints task)) 
 			(push task *T0*)))
   (reverse *T0*))
 
  ;----------------------------------------------
- ;; Searches for current-task in the constraint-slots of all task in global tasklist and replaces it with subtasks; the subtasks themselves are already constrained by each other in where appropriat when the methods are read in 
-(defun add-constraints (subtasks)
+;; Searches for current-task in the constraint-slots of all task in global tasklist and replaces it with subtasks; the subtasks themselves are already constrained by each other in where appropriat when the methods are read in
+;;TODO: für actions umschreiben, wenn kein Input, nur remove
+(defun modify-constraints (subtasks)
 (loop for task in *Tasks* do
   (let ((constraints (hddl:hddl-task-constraints task))
 	(newconstraints ()))
