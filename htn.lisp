@@ -26,27 +26,34 @@
   (defparameter *domain* (read-hddl-domain domain-file))
   (defparameter *problem* (read-hddl-problem problem-file))
   (defparameter *curren-state* nil)
+  (defparameter *T0* nil)
+  (defparameter *Plan* '())
+  (defparameter *actions*  (hddl-domain-actions *domain*))
+  (defparameter *methods*  (hddl-domain-methods *domain*))
+  (defparameter *current-task* nil)
+  (defparameter *current-status* nil)
+  (defparameter *Tasks* (hddl-problem-tasks *problem*))
   )
 ;--------------------------------------------
 ;; main method for first layer of shop2
-(defun shop2-plan(optional plan1 tasks1 state1 substitution1 T0)
-  (let* (
-   (tasks (if (eq depth 0)(hddl-problem-tasks *problem*) tasks1))
-   (current-state (if (eq depth 0)(hddl-problem-init-status *problem*) state1))
-   (Plan (if (eq depth 0) nil plan1));;P = the empty plan
-   (methods (hddl-domain-methods *domain*)) 
-   (actions (hddl-domain-actions *domain*))
-   ; (T0 (constraint(tasks)));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
-   (substitution (if (eq depth 0) nil substitution1))
-   (depth (incf depth))
-   ) 
-   (setq T0 (constraint tasks)) ;; **remove the return value of T0, on the other hand, renew T0 direct through tasks
-    (do* ((tasks T0 (rest tasks))
-          (current-task (first tasks) (resolve-task depth domain problem current-state Plan methods actions T0 current-task substitution Tasks)))
-         ((null tasks)(planner-output Plan)))
-    )
-  )
-  
+; (defun shop2-plan(&optional plan1 tasks1 state1 substitution1 T0)
+;   (let* (
+;    (tasks (if (eq depth 0)(hddl-problem-tasks *problem*) tasks1))
+;    (current-state (if (eq depth 0)(hddl-problem-init-status *problem*) state1))
+;    (Plan (if (eq depth 0) nil plan1));;P = the empty plan
+;    (methods (hddl-domain-methods *domain*)) 
+;    (actions (hddl-domain-actions *domain*))
+;    ; (T0 (constraint(tasks)));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
+;    (substitution (if (eq depth 0) nil substitution1))
+;    (depth (incf depth))
+;    ) 
+;    (setq T0 (constraint tasks)) ;; **remove the return value of T0, on the other hand, renew T0 direct through tasks
+;     (do* ((tasks T0 (rest tasks))
+;           (current-task (first tasks) (resolve-task depth domain problem current-state Plan methods actions T0 current-task substitution Tasks)))
+;          ((null tasks)(planner-output Plan)))
+;     )
+;   )
+(defun shop2-plan (&optional plan tasks state theta))
 ;; second layer of shop2 
 ;; check primitive and restore the plan 
 (defun resolve-task (domain problem current-state Plan methods actions T0 current-task substitution Tasks) 
@@ -67,44 +74,46 @@
  
  ;; third layer of shop2
  ;; unify action and update state from primitive task
- (defun update-primitive-task (Plan actions current-task substitution Tasks current-state T0)
-   (let ((Actions-lst (action-satisfier actions current-task current-state)))
-                      (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
-                                         (t (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ;return updated list
-                                              (update-action-values Actions-lst current-state Plan Tasks substitution))
-                                                 ))
-                                         ))
-   )
- 
- (defun update-action-values (Action-lst state Plan Tasks substitution)
-   (let* ((action (car Action-lst)) 
-          (theta (second action))
-          (setq act (act-substitute theta action)
-          (current-state (modify-state current-state act)) 
-          (Plan (cons (car act) Plan))
-          (Tasks (remove-task current-task Tasks)) ;TODO function ;;Alisa: zusätzlich müssten wir dann auch schauen, dass wir die task aus allen task constraint-Listen löschen!
-          (T0 (constraint(Tasks)))
-          (substitution (substitute (act current-task))))
-     (return-from update-action-values (values Plan Tasks current-state substitution T0) )) 
-   )
- )
- ;; unify methods and update state from nonprimitive task
- (defun update-nonprimitive-task (Plan methods current-task substitution Tasks current-state T0)
-   (let (Methods-lst (method-satisfier methods current-task)) ; {(m . theta)...}  
-        (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
-              (t  (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ; else, from begin
-                    (update-nonprimitive-values Methods-lst current-state Plan Tasks substitution))) ; nondeterministically choose a pair (m, θ) ∈ M
-                                   ) 
+(defun update-primitive-task (Plan actions current-task substitution Tasks current-state T0)
+ (let ((Actions-lst (action-satisfier actions current-task current-state)))
+                    (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
+                                       (t (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ;return updated list
+                                            (update-action-values Actions-lst current-state Plan Tasks substitution))
+                                               ))
                                        ))
-   )
+ )
+ 
+(defun update-action-values (Action-lst)
+ (let* ((action (first Action-lst)) 
+        (theta (second action))
+        (act (action-substitute theta action)) ; (AT TRUCK-0 CITY-LOC-2)
+        (Tasks (remove-task current-task Tasks)) 
+        )
+   (modify-state action) ;; add pos-effect & delete neg-effect
+   (setq *Plan* (cons act *Plan*))
+   (setq *Tasks* )
+   (return-from update-action-values (values Plan Tasks current-state substitution T0))
+   ) 
+)
+ 
+ ;; unify methods and update state from nonprimitive task
+(defun update-nonprimitive-task (Plan methods current-task substitution Tasks current-state T0)
+ (let (Methods-lst (method-satisfier methods current-task)) ; {(m . theta)...}  
+      (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
+            (t  (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ; else, from begin
+                  (update-nonprimitive-values Methods-lst current-state Plan Tasks substitution))) ; nondeterministically choose a pair (m, θ) ∈ M
+                                 ) 
+                                     ))
+ )
  
  (defun update-nonprimitive-values (Methods-lst current-state Plan Tasks substitution)
    (let* ((ms (first Methods-lst))
           (Tasks (remove-task current-task Tasks)) ; modify T by removing t, adding sub(m), constraining each task     
           (subm (hddl-method-subtasks (car ms))) ; in sub(m) to precede the tasks that t preceded
           (substitution (cadr ms)))
-     (if (not (null subm)) (setq T0 constraint(subm))
-         (setq T0 constraint(Tasks)))
+     (if (null subm) (setq T0 constraint(Tasks))
+         (setq T0 constraint(subm))
+         )
      (return-from update-nonprimitive-values (values Plan Tasks current-state substitution T0))
    )
   )
