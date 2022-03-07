@@ -2,7 +2,7 @@
 #|shop2.todo
 ## TODO:
 1. while loop inside shop2-plan
-2. debug action unifier and satisfy & primitive task & non primitive task functions
+2. debug method unifier and satisfy & primitive task & non primitive task functions
 3. print status for current-standpoint 
 4. run read input
 |#
@@ -25,7 +25,6 @@
 (defun fetch-initial-state (domain-file problem-file)
   (defparameter *domain* (read-hddl-domain domain-file))
   (defparameter *problem* (read-hddl-problem problem-file))
-  (defparameter *curren-state* nil)
   (defparameter *T0* nil)
   (defparameter *Plan* '())
   (defparameter *actions*  (hddl-domain-actions *domain*))
@@ -33,35 +32,27 @@
   (defparameter *current-task* nil)
   (defparameter *current-status* nil)
   (defparameter *Tasks* (hddl-problem-tasks *problem*))
+  (defparameter *theta* nil)
   )
 ;--------------------------------------------
 ;; main method for first layer of shop2
-; (defun shop2-plan(&optional plan1 tasks1 state1 substitution1 T0)
-;   (let* (
-;    (tasks (if (eq depth 0)(hddl-problem-tasks *problem*) tasks1))
-;    (current-state (if (eq depth 0)(hddl-problem-init-status *problem*) state1))
-;    (Plan (if (eq depth 0) nil plan1));;P = the empty plan
-;    (methods (hddl-domain-methods *domain*)) 
-;    (actions (hddl-domain-actions *domain*))
-;    ; (T0 (constraint(tasks)));;T0 ← {t ∈ T : no other task in T is constrained to precede t}
-;    (substitution (if (eq depth 0) nil substitution1))
-;    (depth (incf depth))
-;    ) 
-;    (setq T0 (constraint tasks)) ;; **remove the return value of T0, on the other hand, renew T0 direct through tasks
-;     (do* ((tasks T0 (rest tasks))
-;           (current-task (first tasks) (resolve-task depth domain problem current-state Plan methods actions T0 current-task substitution Tasks)))
-;          ((null tasks)(planner-output Plan)))
-;     )
-;   )
-(defun shop2-plan (&optional plan tasks state theta))
+(defun shop2-plan (&optional plan tasks state theta)
+  (setq *T0* (constraint *Tasks*))
+  (loop while (not (null *T0*)) do
+    (if (null *Tasks*) (return *Plan*))
+    (setq *current-task* (car *T0*)
+          *T0* (cdr *T0*))
+    (resolve-task)
+  )
+  )  
 ;; second layer of shop2 
 ;; check primitive and restore the plan 
-(defun resolve-task (domain problem current-state Plan methods actions T0 current-task substitution Tasks) 
-  (if (primitivep current-task)
+(defun resolve-task () 
+  (if (primitivep *current-task*)
     ; primitive (true)
-    (update-primitive-task Plan actions current-task substitution Tasks current-state T0) ;todo handle return value from function
+    (update-primitive-task) ;todo handle return value from function
     ; non-primitive (nil)  
-    (update-nonprimitive-task Plan methods current-task substitution Tasks current-state T0) ;todo handle return value from function
+    (update-nonprimitive-task) ;todo handle return value from function
     )
 )
   
@@ -74,107 +65,110 @@
  
  ;; third layer of shop2
  ;; unify action and update state from primitive task
-(defun update-primitive-task (Plan actions current-task substitution Tasks current-state T0)
- (let ((Actions-lst (action-satisfier actions current-task current-state)))
+(defun update-primitive-task ()
+ (let ((Actions-lst (action-satisfier *actions* *current-task* *current-status*)))
                     (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
-                                       (t (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ;return updated list
-                                            (update-action-values Actions-lst current-state Plan Tasks substitution))
-                                               ))
-                                       ))
- )
+                          (t (update-action-values (nth (random (length Actions-lst)) Actions-lst)))
+                    )
+  )
+)
+ ; nondeterministically choose a pair (a, θ) ∈ A  ; name (theta)
+ ;      modify s by deleting del(a) and adding add(a)
+ ;      append a to P
+ ;      modify T by removing t and applying θ
+      
+ ;      !wenn tasks aus T enfernt werden darauf achten, dass sie auch aus allen *task-constraints*-Listen gelöscht wird! 
+ ;      T0 ← {t ∈ T : no task in T is constrained to precede t}
  
-(defun update-action-values (Action-lst)
- (let* ((action (first Action-lst)) 
-        (theta (second action))
-        (act (action-substitute theta action)) ; (AT TRUCK-0 CITY-LOC-2)
-        (Tasks (remove-task current-task Tasks)) 
+(defun update-action-values (action)
+ (let* ((act (action-substitute action)) ; (AT TRUCK-0 CITY-LOC-2)
         )
-   (modify-state action) ;; add pos-effect & delete neg-effect
-   (setq *Plan* (cons act *Plan*))
-   (setq *Tasks* )
-   (return-from update-action-values (values Plan Tasks current-state substitution T0))
-   ) 
+         (modify-status action) ;; add pos-effect & delete neg-effect for current-status
+         (setq *Plan* (append *Plan* act))
+         (setq *Tasks* (remove-task *current-task* *Tasks*))
+         (setq *T0* (constraint *Tasks*))
+         (setq *theta* (second action))
+         (return-from update-action-values (values *Plan* *Tasks* *current-status* *theta*))
+ ) 
+)
+;; unify methods and update state from nonprimitive task
+(defun update-nonprimitive-task ()
+ (let (Methods-lst (method-satisfier *methods* *current-task*)) ; {(m . theta)...}  
+      (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
+            (t  (update-nonprimitive-values (nth (random (length Methods-lst)) Methods-lst)))) ; nondeterministically choose a pair (m, θ) ∈ M (random choose)
+  )
 )
  
- ;; unify methods and update state from nonprimitive task
-(defun update-nonprimitive-task (Plan methods current-task substitution Tasks current-state T0)
- (let (Methods-lst (method-satisfier methods current-task)) ; {(m . theta)...}  
-      (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
-            (t  (shop2-plan (multiple-value-bind (plan tasks state substitution T0) ; else, from begin
-                  (update-nonprimitive-values Methods-lst current-state Plan Tasks substitution))) ; nondeterministically choose a pair (m, θ) ∈ M
-                                 ) 
-                                     ))
+(defun update-nonprimitive-values (method)
+ (let* (subm (hddl-method-subtasks method))
+   
+   (setq *Tasks* (remove-task *current-task* *Tasks*))
+   (if (not (null subm)) 
+       (constraint subm)
+       (constraint Tasks))
+   (setq *theta* (task-substitute))
+   (return-from update-nonprimitive-values (values *Plan* *Tasks* *current-status* *theta* *T0*))
  )
- 
- (defun update-nonprimitive-values (Methods-lst current-state Plan Tasks substitution)
-   (let* ((ms (first Methods-lst))
-          (Tasks (remove-task current-task Tasks)) ; modify T by removing t, adding sub(m), constraining each task     
-          (subm (hddl-method-subtasks (car ms))) ; in sub(m) to precede the tasks that t preceded
-          (substitution (cadr ms)))
-     (if (null subm) (setq T0 constraint(Tasks))
-         (setq T0 constraint(subm))
-         )
-     (return-from update-nonprimitive-values (values Plan Tasks current-state substitution T0))
-   )
-  )
+)
    
 ; constraint T to T0 
 ;; hier muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
 ;; prüft, ob die constraints leer sind oder nicht
 ;; bei den Methoden, dass die constraints bei den Subtasks eingefügt werden müssen
 (defun constraint (tasks)
-   (setq T0 nil)
+   (setq *T0* nil)
   (dotimes (curr-num (length tasks))
-     (if (not (null (hddl-task-constraints (nth curr-num tasks)))) (setq T0 (cons (nth curr-num tasks) T0)) nil))
-  (return-from constraint T0)
+     (if (not (null (hddl-task-constraints (nth curr-num tasks)))) (setq *T0* (cons (nth curr-num tasks) T0)) nil))
+  (return-from constraint *T0*)
 )
 ;--------------------------------------------------------------
-;;; state CRUD
-;; get-initial-state
-;; init a hash table as a dictionary for current-state 
-;; input: current-state
-;; output: current-state as hash-table
-(defun get-initial-state (current-state) #|((ROAD CITY-LOC-0 CITY-LOC-1) (ROAD CITY-LOC-1 CITY-LOC-0) (ROAD CITY-LOC-1 CITY-LOC-2) (ROAD CITY-LOC-2 CITY-LOC-1)(AT TRUCK-0 CITY-LOC-2))|#
-  (let ((problem-types (hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
-        (state-type (delete-duplicates (car (apply #'mapcar #'list current-state)))) ; (ROAD AT)
-        (current-state-list (make-hash-table))
-        (lis nil)) 
-    (dotimes (i (length state-type))
-     (setf (gethash (nth i state-type) current-state-list) (remove nil (mapcar #'(lambda(c) (if (eq (first c) (nth i state-type)) (rest c))) current-state)))
-     (setq lis nil)
-     )
-    (setq *current-state* current-state-list )
-    ) 
-  )
-;; get-current-state
-;; check if global variable not null, return *current-state*
-; else initialize *current-state*
-;; output: *current-state*
-(defun get-current-state ()
-  (if (null *current-state*) (get-initial-state (hddl-problem-init-status *problem*))
-      *current-state*)
+;;; status CRUD
+;; get-initial-status
+;; init a hash table as a dictionary for current-status
+;; input: current-status
+;; output: current-status as hash-table
+(defun get-initial-status () 
+ (let ((problem-types (hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
+      (current-status (hddl-problem-init-status *problem*)) #|((ROAD CITY-LOC-0 CITY-LOC-1) (ROAD CITY-LOC-1 CITY-LOC-0) (ROAD CITY-LOC-1 CITY-LOC-2) (ROAD CITY-LOC-2 CITY-LOC-1)(AT TRUCK-0 CITY-LOC-2))|#
+      (state-type (delete-duplicates (car (apply #'mapcar #'list (hddl-problem-init-status *problem*))))) ; (ROAD AT)
+      (current-status-list (make-hash-table))
+      (lis nil)) 
+  (dotimes (i (length state-type))
+   (setf (gethash (nth i state-type) current-status-list) (remove nil (mapcar #'(lambda(c) (if (eq (first c) (nth i state-type)) (rest c))) current-status)))
+   (setq lis nil)
+   )
+  (setq *current-status* current-status-list )
+  ) 
+)
+;; get-current-status
+;; check if global variable not null, return *current-status*
+; else initialize *current-status*
+;; output: *current-status*
+(defun get-current-status ()
+  (if (null *current-status*) (get-initial-status)
+      *current-status*)
   )
 ;; add-state
 (defun add-state (pos-effects) ; (AT ?V ?L2)
   (dotimes (i (length pos-effects))
     (setq operator (nth i pos-effects))
-    (if (null (gethash (first operator) *current-state*))
+    (if (null (gethash (first operator) *current-status*))
         (setf (gethash (first operator)) (rest operator))
-        (let ((value1 (gethash (first operator) *current-state*)))
-              (setf (gethash (first operator) *current-state*) (cons (rest operator) value1)))))
+        (let ((value1 (gethash (first operator) *current-status*)))
+              (setf (gethash (first operator) *current-status*) (cons (rest operator) value1)))))
   )
 ;; delete-state
 (defun delete-state (neg-effects) ; (AT ?V ?L2)
   (dotimes (i (length neg-effects))
     (setq operator (nth i neg-effects))
-    (if (gethash (first operator) *current-state*)
-        (let((value1 (gethash (first operator) *current-state*)))
-            (setf (gethash (first operator) *current-state*) (remove (rest operator) value1))
+    (if (gethash (first operator) *current-status*)
+        (let((value1 (gethash (first operator) *current-status*)))
+            (setf (gethash (first operator) *current-status*) (remove (rest operator) value1))
           )
         ))
 )
- ;; modify-state
-(defun modify-state (action)
+ ;; modify-status
+(defun modify-status (action)
    (let ((pos-effects (hddl-action-pos-effects action))
          (neg-effects (hddl-action-neg-effects action)))
      (if neg-effects 
@@ -188,7 +182,7 @@
  ;; input: (AT TRUCK-0 CITY-LOC-2)
  ;; output: T or NIL
 (defun find-state-p (effect) ; (AT ?V ?L2)
-    (if (mapcar #'(lambda(unit) (equal (rest effect) unit)) (gethash (first effect) *current-state*)) T nil)
+    (if (mapcar #'(lambda(unit) (equal (rest effect) unit)) (gethash (first effect) *current-status*)) T nil)
   )      
 ;------------------------------------------------------------------------------
 ; A ← {(a, θ) : a is a ground instance of an operator in D, 
@@ -301,8 +295,8 @@
 
 ;; action-satisfier
 ;; input:
-;; output: actions list (unified with parameters and action's precondition satisfied with current-state)
-;; action's precondition corrspond to current-state
+;; output: actions list (unified with parameters and action's precondition satisfied with current-status)
+;; action's precondition corrspond to current-status
 ;; leave out the satifying action list filtered by current-status
 (defun action-satisfier (actions current-task)
   (let ((actions-satisfied nil)
@@ -315,7 +309,7 @@
             (precondtion nil) 
             )
         (setq precondition (cons (first action-precondition) (mapcar 'second action-params))) ; (AT TRUCK-0 CITY-LOC-0)
-        ;; check the precondition in current-state
+        ;; check the precondition in current-status
         (if (find-state-p precondition) (setq actions-satisfied (cons action actions-satisfied)))
       )
     )
@@ -348,11 +342,21 @@
 ;;substitution: muss alle Variablen in action entsprechend Theta substituieren
 ;; reminder: elements of theta: (?v . (truck . vehicle)) -> (variable.(entity.type))
 
-(defun action-substitute(theta action)
-  
+(defun action-substitute(action)
+  (let ((action-name (hddl-action-name (first action))) ; NOOP
+        (action-params (hddl-action-parameters (first action))) ;((?V VEHICLE) (?L2 LOCATION))
+        (theta (reverse (second action))) ; ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-1 LOCATION))
+        (action-head nil)    
+        )
+    (setq action-head (cons action-name (mapcar 'second theta))) ;(NOOP TRUCK-0 CITY-LOC-1)
+  action-head
+  )
 )      
-     
+;; task-substitute
+;;      
+(defun task-substitute(theta task)
 
+)
 ;-------------------------------------------------------------
 ; remove task from task list
 (defun remove-task (current-task tasks)
