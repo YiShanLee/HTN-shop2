@@ -1,12 +1,12 @@
 ;-------------------------------------------
 #|shop2.todo
 ## TODO:
-0. set T0 as global variable, such that while-loop always uses the T0 we are currently 
-working with
-1. while loop inside shop2-plan
-2. debug method unifier and satisfy & primitive task & non primitive task functions
-3. print status for current-standpoint 
-4. run read input
+3. debug method-satisfy-p
+4. debug method-unifier
+5. write task-substitute
+6. prüfe, dass Methodenname =!= task-name, sondern task-name im task-slot
+
+(7. nochmal prüfen, ob make-hddl-defstruct wirklich exportiert werden muss - gut fürs Testen!)
 |#
 					;-------------------------------------------
 
@@ -19,25 +19,25 @@ working with
   )
 
 (defun read-input (&optional (domain-path "domain.hddl") (problem-path "problem.hddl"))
-(unless domain-path (setq domain-path "domain.hddl" "problem.hddl"))
+  ;;(unless domain-path (setq domain-path "domain.hddl" "problem.hddl"))
   (princ "Enter domain file")
   (setq domain-path (string(read)))
   (princ "Enter problem file")
   (setq problem-path (string(read)))
   ;; global variables from domain knowledge and problem.hddl
-  (fetch-inital-state domain-path problem-path))
+  (fetch-initial-state domain-path problem-path))
  
 
 (defun fetch-initial-state (domain-path problem-path)
   (defparameter *domain* (hddl:read-hddl-domain domain-path))
-(defparameter *problem* (hddl:read-hddl-problem problem-path))
-(defparameter *T0* '())
-(defparameter *Plan* '())
-(defparameter *actions*  (hddl:hddl-domain-actions *domain*))
-(defparameter *methods*  (hddl:hddl-domain-methods *domain*))
-(defparameter *current-task*)
-(defparameter *current-status* (hddl:hddl-problem-init-status *problem*) 
-(defparameter *Tasks* (Hddl:hddl-problem-tasks *problem*))
+  (defparameter *problem* (hddl:read-hddl-problem problem-path))
+  (defparameter *T0* '())
+  (defparameter *Plan* '())
+  (defparameter *actions*  (hddl:hddl-domain-actions *domain*))
+  (defparameter *methods*  (hddl:hddl-domain-methods *domain*))
+  (defparameter *current-task* nil)
+  (defparameter *current-status* (hddl:hddl-problem-init-status *problem*))
+  (defparameter *Tasks* (hddl:hddl-problem-tasks *problem*)))
 
 ;--------------------------------------------
 ;; main method for first layer of shop2
@@ -62,12 +62,13 @@ working with
 )
 
 
-(defun primitivep (task actions)
- (let ((taskname (hddl:hddl-task-name task)))
- (loop for a in actions do
-  (if (eq (hddl:hddl-action-name a) taskname)
-      (return t)))
-     (return nil)))	  
+(defun primitivep (task)
+ (let ((taskname (hddl:hddl-task-name task))
+      (actionname))
+  (loop for a in *actions* do
+    (setq actionname (hddl:hddl-action-name a))
+    (if (equal actionname taskname)
+	(return t)))));;ausreichend, wenn nicht t ausgegeben wird, wird automatisch nil ausgegeben!
 
  
  ;; third layer of shop2
@@ -112,8 +113,7 @@ working with
 	 subm (hddl:hddl-method-subtasks (car method))
 	 theta (cadr method); in sub(m) to precede the tasks that t precede
 	 subm (task-substitute theta subm)
-	 ;; TODO: when constraining, search for current-task and replace it with subtasks! Subtasks themselves should already have constraints from reading-in of subtasks
-	 *Tasks* (add-constraints subm)) ;;constraining each task 
+	 *Tasks* (add-constraints subm)) ;;constraining each task by replacing the task with its subtasks
      (push subm *Tasks*)  ;;adding sub(m)
 (if (not (null subm)) (setq *T0* (constraint subm))
          (setq *T0* (constraint)))
@@ -123,38 +123,29 @@ working with
 
 
 
-;--------------------------------------   
-; constraint T to T0 
-;; Alisa: muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
-;; ich würde ganz am Anfang des Codes für jede task in Tsk eine leere Liste erstellen, die die constraints enthält,
-;; dann müssten hier nur prüfen, ob die constraints leer sind oder nicht
-;; dann müssen wir bei den Methoden dran denken, dass die constraints bei den Subtasks eingefügt werden müssen
-
-(defun constraint(&optional tasks)
-(let ((tasklist (if tasks (setq tasklist tasks)(setq tasklist *Tasks*))))
-      (loop for task in tasklist do
+;--------------------------------------
+;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case; if no tasklist is provided, the global tasklist is used as default value
+(defun constraint(&optional (tasks *Tasks*)) 
+      (loop for task in tasks do
 		(if (null (hddl:hddl-task-constraints task)) 
 			(push task *T0*)))
-      (reverse *T0*))
+  (reverse *T0*))
 
- 	;----------------------------------------------
-(defun add-constrains (subtasks)
-;; gehe durch alle constraint-lists und ersetze *current-task* durch subtasks
-  )
+ ;----------------------------------------------
+ ;; Searches for current-task in the constraint-slots of all task in global tasklist and replaces it with subtasks; the subtasks themselves are already constrained by each other in where appropriat when the methods are read in 
+(defun add-constraints (subtasks)
+(loop for task in *Tasks* do
+  (let ((constraints (hddl:hddl-task-constraints task))
+	(newconstraints ()))
+    (unless (null constraints)
+      (loop for c in constraints do
+	(if (equalp c *current-task*)
+	    (push subtasks newconstraints)
+	    (push c newconstraints)))
+      (setf (hddl:hddl-task-constraints task) newconstraints)))))
 
-  ;------------------------------------------------------------------ 
-;; removes tasks that have been finished by adding actions to the plan from the Tasks list, and from every task-constraint-list in Tasks
-(defun remove-task (current-task tasks)
-  (setq tasks (remove current-task tasks))
-(loop for task in tasks do
-(let ((constraints (hddl:hddl-task-constraints task)))
-(setf constraint (remove current-task constraints)
-      (hddl:hddl-task-constraint task) constraints)))
-  tasks
-  )
+
 ;--------------------------------------------------------------
- 
-;---------------------
 
 ;; für alle eingegebenen Aktionen prüfe, ob die preconditions einer Aktion im aktuellen Status erfüllt sind, falls ja, füge sie in Ergebnisliste ein
 ;; preconditions sind dann erfüllt, wenn sie im aktuellen Status enthalten sind
