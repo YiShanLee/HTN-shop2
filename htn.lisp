@@ -2,7 +2,7 @@
 #|shop2.todo
 ## TODO:
 1. while loop inside shop2-plan
-2. debug method unifier and satisfy & primitive task & non primitive task functions
+2. debug primitive task & non primitive task functions
 3. print status for current-standpoint 
 4. run read input
 |#
@@ -50,12 +50,13 @@
 (defun resolve-task () 
   (if (primitivep *current-task*)
     ; primitive (true)
-    (update-primitive-task) ;todo handle return value from function
+    (update-primitive-task) 
     ; non-primitive (nil)  
-    (update-nonprimitive-task) ;todo handle return value from function
+    (update-nonprimitive-task) 
     )
 )
-  
+
+;; task (constraint ) todo
 (defun primitivep (task)
  (if (eql (type-of task) 'HDDL-ACTION)
    T
@@ -85,9 +86,9 @@
         )
          (modify-status action) ;; add pos-effect & delete neg-effect for current-status
          (setq *Plan* (append *Plan* act))
-         (setq *Tasks* (remove-task *current-task* *Tasks*))
+         (setq *Tasks* (remove-task *current-task* *Tasks*)) ;; todo: add-constraint 
          (setq *T0* (constraint *Tasks*))
-         (setq *theta* (second action))
+         (setq *theta* (second action)) ;; todo
          (return-from update-action-values (values *Plan* *Tasks* *current-status* *theta*))
  ) 
 )
@@ -103,10 +104,10 @@
  (let* (subm (hddl-method-subtasks method))
    
    (setq *Tasks* (remove-task *current-task* *Tasks*))
-   (if (not (null subm)) 
+   (if (not (null subm)) ;; modify-constraint
        (constraint subm)
        (constraint Tasks))
-   (setq *theta* (task-substitute))
+   (setq *theta* (task-substitute)) ;; todo theta
    (return-from update-nonprimitive-values (values *Plan* *Tasks* *current-status* *theta* *T0*))
  )
 )
@@ -168,15 +169,16 @@
         ))
 )
  ;; modify-status
-(defun modify-status (action)
-   (let ((pos-effects (hddl-action-pos-effects action))
-         (neg-effects (hddl-action-neg-effects action)))
-     (if neg-effects 
-         (delete-state neg-effects))
-     (if pos-effects 
-         (add-state neg-effects))
-     )
-   ) 
+(defun modify-status (action) ; (action . theta)
+ (let ((pos-effects (hddl-action-pos-effects (first action)))
+       (neg-effects (hddl-action-neg-effects (first action)))
+       (theta (second action)))
+   (if neg-effects 
+       (delete-state (effect-substitute neg-effects theta))) ; {(and (AT ?V ?L2) (ROAD ?l1 ?l2)) & ((?V TRUCK-0 VEHICLE)) (?L2 CITY-LOC-0 LOCATION))}
+   (if pos-effects 
+       (add-state (effect-substitute pos-effects theta)))
+  )
+) 
  
  ;; find-state-p
  ;; input: (AT TRUCK-0 CITY-LOC-2)
@@ -217,15 +219,15 @@
 ;; output: True/ False
 ;; check name of tasks from action and current-task the same :: todo
 ;;       each parameter identical from operator (as action or method) and task 
-;; pass to next function as actino-satisfier or method-satisfier 
+;; pass to next function as action-satisfier or method-satisfier 
 (defun operator-unifier-p (operator task)
-  (let ((op-task-name (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-name operator) (first (hddl-method-task operator))))
+  (let ((op-task-name (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-name operator) (first (hddl-method-task operator)))) 
         (op-params (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-parameters operator) (rest (hddl-method-task operator))))
         (task-name (hddl-task-name task))
         (task-params (hddl-task-parameters task))
         )
       (cond ((and (eql (type-of operator) 'HDDL-ACTION) (a-identical-parameters-p task-params op-params)) (return-from operator-unifier-p T))
-            ((and (eql (type-of operator) 'HDDL-METHOD) (eq task-name op-task-name) (m-identical-parameters-p task-params op-params)) (return-from operator-unifier-p T))
+            ((and (eql (type-of operator) 'HDDL-METHOD) (eq task-name op-task-name) (m-identical-parameters-p task-params op-params operator)) (return-from operator-unifier-p T))
             (t (return-from operator-unifier-p nil)))
   ))
 ;;; a-identical-parameters-p
@@ -254,16 +256,14 @@
 ;; input: task parameters & method parameters
 ;; output: True / False
 ;; pass to next function as operator-unifier-p
-(defun m-identical-parameters-p (task-params m-task-params) ; (TRUCK-0 CITY-LOC-0) / (?v ?l2)
+(defun m-identical-parameters-p (task-params m-task-params operator) ; (TRUCK-0 CITY-LOC-0) / (?v ?l2)
   (let ((types (hddl-problem-objects *problem*)) ; ((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
+        (op-param (hddl-method-parameters operator)) ;((?V VEHICLE) (?L LOCATION))
         (task-type nil))
-    (dotimes (i (length task-params))
-      (setq one-set (assoc (nth i task-params) types)) ;(TRUCK-0 VEHICLE)
-      (setq task-type (cons (char (symbol-name (cadr one-set)) 0) task-type)) ; ("v")
-      )
-    (setq task-type (sort task-type #'string<))  ;("L" "V")
-    (setq m-task-params (mapcar #'(lambda(c) (char c 1)) (mapcar #'symbol-name m-task-params))) ;("V" "L")
-    (setq m-task-params (sort m-task-params #'string<))  ;("L" "V")
+      (setq task-type (mapcar #'(lambda(c) (second (assoc c types))) task-params))
+      (setq task-type (sort task-type #'string<))  ;(LOCATION VEHICLE)
+      (setq m-task-params (mapcar #'(lambda(c) (second (assoc c op-param))) m-task-params)) ;(VEHICLE LOCATION)
+      (setq m-task-params (sort m-task-params #'string<))  ; (LOCATION VEHICLE)
   (cond 
     ((not (eq (length task-type) (length m-task-params))) (return-from m-identical-parameters-p nil)) ; quick check and return 
     ((equal task-type m-task-params) (return-from m-identical-parameters-p T))
@@ -289,18 +289,18 @@
       (if (operator-unifier-p action current-task) 
           (setq actions-satisfied (cons (cons action (parameters-binding action current-task)) actions-satisfied))
           ) 
-      ) (return-from action-unifier actions-satisfied)
+      ) (return-from action-unifier actions-satisfied) ;;{(a.theta)}
     )
   )
 
 ;; action-satisfier
-;; input:
+;; input: actions & current-task
 ;; output: actions list (unified with parameters and action's precondition satisfied with current-status)
 ;; action's precondition corrspond to current-status
 ;; leave out the satifying action list filtered by current-status
 (defun action-satisfier (actions current-task)
   (let ((actions-satisfied nil)
-        (actions (action-unifier actions current-task)))
+        (actions (action-unifier actions current-task))) ;;{(a.theta)}
     (dotimes (i (length actions))
       (let* ((action (nth i actions))
             (action-precondition (hddl-action-preconditions (first action))) ;(AT ?V ?L2)
@@ -351,7 +351,23 @@
     (setq action-head (cons action-name (mapcar 'second theta))) ;(NOOP TRUCK-0 CITY-LOC-1)
   action-head
   )
-)      
+)   
+;; todo effect of saction1 with parameter substitute
+;; input: {(AT ?V ?L2) & ((?V TRUCK-0 VEHICLE)) (?L2 CITY-LOC-0 LOCATION) (?L3 CITY-LOC-1 LOCATION))}
+;; output: list of effects {(AT TRUCK-0 CITY-LOC-0)}
+(defun effect-substitute(effects theta)
+  (let ((effects-lst nil)
+        (effect nil))
+    (if (subsetp (list (first effects)) effects) ;; to check if content has single list
+      (setq effects-lst (cons (first effects) (mapcar #'(lambda(c) (second (assoc c theta))) (rest effects))))
+      (dotimes (i (length effects))
+      (setq effect (cons (first (nth i effects)) (mapcar #'(lambda(c) (second (assoc c theta))) (rest (nth i effects)))))
+      (push effect effects-lst)
+      ) 
+    )
+    effects-lst
+  )
+)   
 ;; task-substitute
 ;;      
 (defun task-substitute(theta task)
