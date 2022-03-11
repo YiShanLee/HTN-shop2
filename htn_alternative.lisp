@@ -1,12 +1,9 @@
 ;-------------------------------------------
 #|shop2.todo
 ## TODO:
-3. debug method-satisfy-p
-4. debug method-unifier
-5. write task-substitute
-6. prüfe, dass Methodenname =!= task-name, sondern task-name im task-slot
-
-(7. nochmal prüfen, ob make-hddl-defstruct wirklich exportiert werden muss - gut fürs Testen!)
+1. modify-constraints für actions erweitern
+2. generelles debugging
+3. read-hddl optimiteren
 |#
 					;-------------------------------------------
 
@@ -19,7 +16,7 @@
   )
 
 (defun read-input (&optional (domain-path "domain.hddl") (problem-path "problem.hddl"))
-  ;;(unless domain-path (setq domain-path "domain.hddl" "problem.hddl"))
+  ;(unless domain-path (setq domain-path "domain.hddl" "problem.hddl"))
   (princ "Enter domain file")
   (setq domain-path (string(read)))
   (princ "Enter problem file")
@@ -85,7 +82,6 @@
  ;;nondeterministically choose a pair (a, θ) ∈ A -> choose first action
    (let* ((theta (cdr action)))
 		   ;;apply θ action
-		   ;TODO: write function substitute!
           (setq action (act-substitute theta action)
 		  ;;modify s by deleting del(a) and adding add(a)
                *current-state* (modify-status *current-state* action)) 
@@ -93,7 +89,7 @@
           (push action *Plan*))
 		  ;; modify T by removing t and applying theta
 		(setq *Tasks* (task-substitute theta *Tasks*)
-          (*Tasks* (remove-task *current-task* *Tasks*)) 
+          (*Tasks* (modify-constraint)) 
           (*T0* (constraint))
      (return-from update-action-values (values *Plan* *Tasks* *current-state* theta *T0*))) 
    )
@@ -102,8 +98,7 @@
  (defun update-nonprimitive-task ()
    ; M ← {(m, θ) : m is an instance of a method in D, θ unifies {head(m), t},
    ; and m and θ are as general as possible} 
-   ;;TODO: welche Funktion hier für methods?
-   (let* (Methods-lst (method-unifier *methods* *current-task*)) ; {(m . theta)...}  
+   (let* (Methods-lst (method-unifier)) ; {(m . theta)...}  
      (cond ((null Methods-lst) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
 	   (t (update-nonprimitive-values (car Methods-lst)))))) ; nondeterministically choose a pair (m, θ) ∈ M
 
@@ -113,7 +108,7 @@
 	 subm (hddl:hddl-method-subtasks (car method))
 	 theta (cadr method); in sub(m) to precede the tasks that t precede
 	 subm (task-substitute theta subm)
-	 *Tasks* (add-constraints subm)) ;;constraining each task by replacing the task with its subtasks
+	 *Tasks* (modify-constraints subm)) ;;constrain tasks with subtasks where appropriate
      (push subm *Tasks*)  ;;adding sub(m)
 (if (not (null subm)) (setq *T0* (constraint subm))
          (setq *T0* (constraint)))
@@ -125,15 +120,17 @@
 
 ;--------------------------------------
 ;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case; if no tasklist is provided, the global tasklist is used as default value
-(defun constraint(&optional (tasks *Tasks*)) 
+(defun constraint(&optional (tasks *Tasks*))
+(setq *T0* nil)
       (loop for task in tasks do
 		(if (null (hddl:hddl-task-constraints task)) 
 			(push task *T0*)))
   (reverse *T0*))
 
  ;----------------------------------------------
- ;; Searches for current-task in the constraint-slots of all task in global tasklist and replaces it with subtasks; the subtasks themselves are already constrained by each other in where appropriat when the methods are read in 
-(defun add-constraints (subtasks)
+;; Searches for current-task in the constraint-slots of all task in global tasklist and replaces it with subtasks; the subtasks themselves are already constrained by each other in where appropriat when the methods are read in
+;;TODO: für actions umschreiben, wenn kein Input, nur remove
+(defun modify-constraints (subtasks)
 (loop for task in *Tasks* do
   (let ((constraints (hddl:hddl-task-constraints task))
 	(newconstraints ()))
@@ -165,15 +162,45 @@
 
 ;-------------------------------------------------
 
-;;unnötig? bei uns keine preconditions
-(defun method-satisfyp (m state)
+;;unnötig? bei uns keine preconditions ;;TODO:umschreiben oder weglassen
+(defun method-satisfyp (m)
   (let ((method-satisfied nil))
     (loop
       (cond ((null m) (return method-satisfied))
-          ((not (null (find ((hddl-method-preconditions (car m)) state)))) (setq method-satisfied (push (car m) method-satisfied))))
+          ((not (null (find ((hddl-method-preconditions (car m)) *current-status*)))) (setq method-satisfied (push (car m) method-satisfied))))
       (setq m (cdr m))
     )))
- 
+					
+;--------------------------------------------------------
+;; unify-m 
+; prueft, ob die Laenge der Parameters gleich
+; prueft, ob Typen der Parameters gleich
+; return a unified list such as {(m . theta)...}      
+(defun method-unifier ()
+  (let* ((m (method-satisfyp *methods*))
+         (task-name (hddl:hddl-task-name *current-task*))
+	 (taskparams (hddl:hddl-task-parameters *current-task*))
+	 ;;TODO:Achtung, wir müssen erst aus objects auslesen!
+	 (objects (hddl:hddl-problem-objects *problem*))
+	 (taskobjects)
+	 (taskparam-types)
+	 (method-lst))
+    
+    (loop for o in objects do
+      (loop for taskparam in taskparams do
+	(if (equal (car o) taskparam)
+	    (progn
+	      (push o taskobjects)
+	      (push (cadr o) taskparam-types)))))
+
+    (loop for method in m do
+      (when (and
+	      (eq task-name (car (hddl:hddl-method-task method)));;task corresponds to method
+	      (eq (length taskparams) (length (hddl:hddl-method-parameters method)))
+	      (equalp (sort taskparam-types #'string<) (sort cadr (apply #'mapcar #'list (hddl:hddl-method-parameters method #'string<))))
+
+	     (setq Methods-lst (push (cons method (car (apply #'mapcar #'list (hddl:hddl-method-parameters (car m))))) Methods-lst)))))))  ;;TODO:Achtung, wird noch nicht richtig gepusht- nu v? statt alles!
+;------------------------------------------------------
 
 ;;unifier sollte am besten 
 ;;1. alle actionen sammeln, die den gleichen Namen haben wie die task
@@ -211,29 +238,6 @@
 	       (push (cons a theta) unified_actions))))) ;;push the action and related theta to the result-list
     (reverse unified_actions)))
 
-;--------------------------------------------------------
-;; unify-m 
-; prueft, ob die Laenge der Parameters gleich
-; prueft, ob Typen der Parameters gleich
-; return a unified list such as {(m . theta)...}      
-(defun method-unifier (methods task state)
-  (let ((m method-satisfyp (methods state)))
-        (task-name (hddl-task-name task))
-        (taskparams (hddl-task-parameters task))
-        (taskparam-types (cadr (apply #'mapcar #'list (hddl-task-parameters task))))
-        (taskparam (car (apply #'mapcar #'list (hddl-task-parameters task))))
-        (Methods-lst nil)
-        )
-    (loop
-      (cond ((and (eq (length taskparams) (length (hddl-method-parameters (car m))))
-                 (equalp (taskparam-types) (cadr (apply #'mapcar #'list (hddl-method-parameters (car m))))))
-            (setq Methods-lst (push (cons (car m) (car (apply #'mapcar #'list (hddl-method-parameters (car m))))) Methods-lst)))
-            ((null m) (return Methods-lst))
-            )
-      (setq m (cdr m))
-    )
-  )
-)
 ;------------------------------------------------------
 ;;substitution: muss alle Variablen in action entsprechend Theta substituieren
 ;; reminder: elements of theta: (?v . (truck . vehicle)) -> (variable.(entity.type))
