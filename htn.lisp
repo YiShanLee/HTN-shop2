@@ -1,8 +1,7 @@
-;-------------------------------------------
 #|shop2.todo
 ## TODO:
 1. while loop inside shop2-plan
-2. debug primitive task & non primitive task functions
+2. debug method unifier and satisfy & primitive task & non primitive task functions
 3. print status for current-standpoint 
 4. run read input
 |#
@@ -56,13 +55,15 @@
     )
 )
 
-;; task (constraint ) todo
+
 (defun primitivep (task)
- (if (eql (type-of task) 'HDDL-ACTION)
-   T
-   nil
-   )
- )
+ (let ((taskname (hddl-task-name task))
+      (actionname))
+  (loop for a in *actions* do
+    (setq actionname (hddl-action-name a))
+    (if (equal actionname taskname)
+  (return t) nil))));;ausreichend, wenn nicht t ausgegeben wird, wird automatisch nil ausgegeben!
+
  
  ;; third layer of shop2
  ;; unify action and update state from primitive task
@@ -102,8 +103,7 @@
  
 (defun update-nonprimitive-values (method)
  (let* (subm (hddl-method-subtasks method))
-   
-   (setq *Tasks* (remove-task *current-task* *Tasks*))
+   (setq *Tasks* (modify-constraints *current-task* *Tasks*))
    (if (not (null subm)) ;; modify-constraint
        (constraint subm)
        (constraint Tasks))
@@ -111,6 +111,19 @@
    (return-from update-nonprimitive-values (values *Plan* *Tasks* *current-status* *theta* *T0*))
  )
 )
+;; Searches for current-task in the constraint-slots of all task in global tasklist and replaces it with subtasks
+; the subtasks themselves are already constrained by each other in where appropriat when the methods are read in
+;;TODO: für actions umschreiben, wenn kein Input, nur remove
+(defun modify-constraints (subtasks)
+(loop for task in *Tasks* do
+  (let ((constraints (hddl:hddl-task-constraints task))
+  (newconstraints ()))
+    (unless (null constraints)
+      (loop for c in constraints do
+  (if (equalp c *current-task*)
+      (push subtasks newconstraints)
+      (push c newconstraints)))
+      (setf (hddl:hddl-task-constraints task) newconstraints)))))
    
 ; constraint T to T0 
 ;; hier muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
@@ -122,6 +135,17 @@
      (if (not (null (hddl-task-constraints (nth curr-num tasks)))) (setq *T0* (cons (nth curr-num tasks) T0)) nil))
   (return-from constraint *T0*)
 )
+
+#|
+;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case; if no tasklist is provided, the global tasklist is used as default value
+(defun constraint(&optional (tasks *Tasks*))
+(setq *T0* nil)
+      (loop for task in tasks do
+    (if (null (hddl:hddl-task-constraints task)) 
+      (push task *T0*)))
+  (reverse *T0*))
+
+|#
 ;--------------------------------------------------------------
 ;;; status CRUD
 ;; get-initial-status
@@ -230,6 +254,7 @@
             ((and (eql (type-of operator) 'HDDL-METHOD) (eq task-name op-task-name) (m-identical-parameters-p task-params op-params operator)) (return-from operator-unifier-p T))
             (t (return-from operator-unifier-p nil)))
   ))
+
 ;;; a-identical-parameters-p
 ;; input: task parameters & action parameters (operator as action or method)
 ;; output: True / False
@@ -373,12 +398,7 @@
 (defun task-substitute(theta task)
 
 )
-;-------------------------------------------------------------
-; remove task from task list
-(defun remove-task (current-task tasks)
-  (setq tasks (remove current-task tasks))
-  (return-from remove-task tasks)
-  )
+
 ;-------------------------------------------------------------
 ; ; failure handling
 ; (define-condition failure-handling (err)
