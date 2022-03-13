@@ -119,7 +119,9 @@
 
 
 ;--------------------------------------
-;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case; if no tasklist is provided, the global tasklist is used as default value
+;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case
+;;Input: if no tasklist is provided, the global tasklist is used as default value
+;; Output: *T0*
 (defun constraint(&optional (tasks *Tasks*))
 (setq *T0* nil)
       (loop for task in tasks do
@@ -164,7 +166,7 @@
 
 ;-------------------------------------------------
 
-;;unnötig? bei uns keine preconditions ;;TODO:umschreiben oder weglassen
+;;unnötig? bei uns keine preconditions 
 (defun method-satisfyp (m)
   (let ((method-satisfied nil))
     (loop
