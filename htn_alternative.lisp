@@ -109,7 +109,7 @@
 	 theta (cadr method); in sub(m) to precede the tasks that t precede
 	 subm (task-substitute theta subm)
 	 *Tasks* (modify-constraints subm)) ;;constrain tasks with subtasks where appropriate
-     (push subm *Tasks*)  ;;adding sub(m)
+     (append subm *Tasks*)  ;;adding sub(m) -> use append because push adds subtasks as list!
 (if (not (null subm)) (setq *T0* (constraint subm))
          (setq *T0* (constraint)))
      (return-from update-nonprimitive-values (values *Plan* *Tasks* *current-state* *substitution* *T0*)))
@@ -119,7 +119,9 @@
 
 
 ;--------------------------------------
-;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case; if no tasklist is provided, the global tasklist is used as default value
+;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case
+;;Input: if no tasklist is provided, the global tasklist is used as default value
+;; Output: *T0*
 (defun constraint(&optional (tasks *Tasks*))
 (setq *T0* nil)
       (loop for task in tasks do
@@ -128,16 +130,18 @@
   (reverse *T0*))
 
  ;----------------------------------------------
-;; Searches for current-task in the constraint-slots of all task in global tasklist and replaces it with subtasks; the subtasks themselves are already constrained by each other in where appropriat when the methods are read in
-;;TODO: für actions umschreiben, wenn kein Input, nur remove
-(defun modify-constraints (subtasks)
+;; Modifies the constraint-lists of all tasks in *Tasks* by either removing every occurrence of *current-task* or if given a list of subtasks substituting every occurrence of *current-task* by that list
+;; Input (optional): List of subtasks
+;; no output, modifies *Tasks* directly
+(defun modify-constraints (&optional (subtasks nil))
+  (declare (optimize debug))
 (loop for task in *Tasks* do
   (let ((constraints (hddl:hddl-task-constraints task))
 	(newconstraints ()))
     (unless (null constraints)
       (loop for c in constraints do
 	(if (equalp c *current-task*)
-	    (push subtasks newconstraints)
+	    (append subtasks newconstraints)
 	    (push c newconstraints)))
       (setf (hddl:hddl-task-constraints task) newconstraints)))))
 
@@ -162,7 +166,7 @@
 
 ;-------------------------------------------------
 
-;;unnötig? bei uns keine preconditions ;;TODO:umschreiben oder weglassen
+;;unnötig? bei uns keine preconditions 
 (defun method-satisfyp (m)
   (let ((method-satisfied nil))
     (loop
