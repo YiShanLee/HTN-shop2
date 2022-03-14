@@ -45,12 +45,12 @@
         (setq *current-task* (car *T0*)
 			  *T0* (cdr *T0*))
 		(resolve-task)
-	)))
+	))
   
 ;; second layer of shop2 
 ;; check primitive and restore the plan 
 (defun resolve-task ()
-  (if (primitivep *current-task* *actions*)
+  (if (primitivep *current-task*)
     ; primitive (true)
     (update-primitive-task) ;todo handle return value from function
     ; non-primitive (nil)  
