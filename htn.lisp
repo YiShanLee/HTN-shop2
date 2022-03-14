@@ -1,3 +1,4 @@
+;-------------------------------------------
 #|shop2.todo
 ## TODO:
 1. while loop inside shop2-plan
@@ -41,6 +42,7 @@
     (if (null *Tasks*) (return *Plan*))
     (setq *current-task* (car *T0*)
           *T0* (cdr *T0*))
+    (format t "~%step-> shop2-plan: *current-task*: ~A~% *T0*: ~A~%" *current-task* *T0*)
     (resolve-task)
   )
   )  
@@ -68,7 +70,8 @@
  ;; third layer of shop2
  ;; unify action and update state from primitive task
 (defun update-primitive-task ()
- (let ((Actions-lst (action-satisfier *actions* *current-task* *current-status*)))
+ (let* ((Actions-lst (action-satisfier *actions* *current-task* *current-status*)))
+        (format t "~%step of update-primitive-task -> Actions-lst: ~A" Actions-lst)
                     (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
                           (t (update-action-values (nth (random (length Actions-lst)) Actions-lst)))
                     )
@@ -85,6 +88,7 @@
 (defun update-action-values (action)
  (let* ((act (action-substitute action)) ; (AT TRUCK-0 CITY-LOC-2)
         )
+   (format t "~%step-> update-action-values")
          (modify-status action) ;; add pos-effect & delete neg-effect for current-status
          (setq *Plan* (append *Plan* act))
          (setq *Tasks* (remove-task *current-task* *Tasks*)) ;; todo: add-constraint 
@@ -95,36 +99,76 @@
 )
 ;; unify methods and update state from nonprimitive task
 (defun update-nonprimitive-task ()
- (let (Methods-lst (method-satisfier *methods* *current-task*)) ; {(m . theta)...}  
-      (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
+ (let* ((Methods-lst (method-satisfier *methods* *current-task*))) ; {(m . theta)...}  
+     (format t "~%step-> update-nonprimitive-task -> Methods-lst: ~A" (length Methods-lst))
+     (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
             (t  (update-nonprimitive-values (nth (random (length Methods-lst)) Methods-lst)))) ; nondeterministically choose a pair (m, θ) ∈ M (random choose)
-  )
+ ) 
 )
  
-(defun update-nonprimitive-values (method)
- (let* (subm (hddl-method-subtasks method))
-   (setq *Tasks* (modify-constraints *current-task* *Tasks*))
-   (if (not (null subm)) ;; modify-constraint
-       (constraint subm)
-       (constraint Tasks))
-   (setq *theta* (task-substitute)) ;; todo theta
-   (return-from update-nonprimitive-values (values *Plan* *Tasks* *current-status* *theta* *T0*))
- )
+(defun update-nonprimitive-values (method-list)
+ 
+  ; (format t "~%step-> update-nonprimitive-values: subtasks for method ~A" subtasks)
+  (format t "~%update-nonprimitive-values-> *Tasks*: ~A" *Tasks*)
+  (modify-constraints method-list)
+  (return-from update-nonprimitive-values (values *Plan* *Tasks* *current-status* *theta* *T0*))
+ 
 )
-;; Searches for current-task in the constraint-slots of all task in global tasklist and replaces it with subtasks
+;; Search for current-task in the constraint-slots of all task in global tasklist and replaces it with subtasks
 ; the subtasks themselves are already constrained by each other in where appropriat when the methods are read in
-;;TODO: für actions umschreiben, wenn kein Input, nur remove
-(defun modify-constraints (subtasks)
-(loop for task in *Tasks* do
-  (let ((constraints (hddl:hddl-task-constraints task))
-  (newconstraints ()))
-    (unless (null constraints)
-      (loop for c in constraints do
-  (if (equalp c *current-task*)
-      (push subtasks newconstraints)
-      (push c newconstraints)))
-      (setf (hddl:hddl-task-constraints task) newconstraints)))))
-   
+; method: subtasks 
+; (defun modify-constraints (subtasks)
+; (loop for task in *Tasks* do
+;   (let ((constraints (hddl-task-constraints task))
+;         (newconstraints nil))
+;     (unless (null constraints)
+;       (loop for c in constraints do
+;   (if (equalp c *current-task*)
+;       (push subtasks newconstraints)
+;       (push c newconstraints)))
+;       (setf (hddl-task-constraints task) newconstraints))
+;     (return-from modify-constraints newconstraints))))
+
+;; modify-constraints
+;; input: subtasks of one method, could be zero could be a list
+#|(#S(HDDL-TASK :NAME GET-TO :PARAMETERS (?V ?L2) :CONSTRAINTS NIL)
+ #S(HDDL-TASK
+    :NAME DRIVE
+    :PARAMETERS (?V ?L2 ?L3)
+    :CONSTRAINTS (#S(HDDL-TASK
+                     :NAME GET-TO
+                     :PARAMETERS (?V ?L2)
+                     :CONSTRAINTS NIL))))|#
+;; output: *Tasks* with updated subtasks
+; if subtasks has null constraint push it to *Tasks*, else append its constraint until no constraint within one task. 
+(defun modify-constraints (method-list)
+  (let* ((updated-tasks-list nil)
+        (theta (cadr method-list))
+        (method (first method-list))
+        (subtasks (hddl-method-subtasks method))
+        )
+    ; (format t "~%step-> modify-constraints: method-list -> ~A~% subtasks: ~A" method-list subtasks)
+    (format t "~%step-> modify-constraints: theta -> ~A~% subtasks: ~A" theta subtasks)
+    (if subtasks
+       (update-tasks-and-T0 subtasks theta)
+      )
+    )
+)
+
+(defun update-tasks-and-T0 (subtasks theta)
+  (update-tasks subtasks)
+  (task-substitute theta) ; substitute theta for tasks
+  (remove-duplicates *Tasks*) ; remove duplicates tasks
+  (constraint *Tasks*); remove constraint 
+  )
+;; update one methods'subtasks to *Tasks*
+(defun update-tasks (subtasks)
+    (mapcar #'(lambda(c)
+               (cond ((hddl-task-constraints c) (push c *Tasks*)) ; if subtask has constraints, push its task first to *Tasks*
+                     ((hddl-task-constraints c) (update-tasks (hddl-task-constraints c))) ; Then, find its next task without constraint
+                     (t (push c *Tasks*)))) ; if there is no constraint push to *Tasks*
+            subtasks)
+    )
 ; constraint T to T0 
 ;; hier muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
 ;; prüft, ob die constraints leer sind oder nicht
@@ -132,7 +176,8 @@
 (defun constraint (tasks)
    (setq *T0* nil)
   (dotimes (curr-num (length tasks))
-     (if (not (null (hddl-task-constraints (nth curr-num tasks)))) (setq *T0* (cons (nth curr-num tasks) T0)) nil))
+     (if (null (hddl-task-constraints (nth curr-num tasks))) (setq *T0* (cons (nth curr-num tasks) *T0*)) nil))
+  (format t "~%step-> constraint: constraint list of tasks-> *T0*: ~A" *T0*)
   (return-from constraint *T0*)
 )
 
@@ -231,8 +276,8 @@
           (setq binding-list (cons (cons (cadr (assoc (cadr one-set) reversed-op-param)) one-set) binding-list))
           )
     (if (eql (type-of operator) 'HDDL-ACTION)
-        (format t "step-> parameters-binding with action ~S" (list binding-list))
-        (format t "step-> parameters-binding with method ~S" (list binding-list))
+        (format t "~%step-> parameters-binding with action ~S" (list binding-list))
+        (format t "~%step-> parameters-binding with method ~S" (list binding-list))
         )
     (return-from parameters-binding (list binding-list)) ; ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-0 LOCATION))
     )
@@ -315,6 +360,7 @@
           (setq actions-satisfied (cons (cons action (parameters-binding action current-task)) actions-satisfied))
           ) 
       ) (return-from action-unifier actions-satisfied) ;;{(a.theta)}
+    (format t "~%step-> action-unifier: current unified actions list: ~A" actions-satisfied)
     )
   )
 
@@ -338,6 +384,8 @@
         (if (find-state-p precondition) (setq actions-satisfied (cons action actions-satisfied)))
       )
     )
+        (format t "~%step-> action-satisfier: current satisfied actions list: ~A" actions-satisfied)
+
   (return-from action-satisfier actions-satisfied)
   #|((#S(HDDL-ACTION
      :NAME NOOP
@@ -358,14 +406,12 @@
       (setq method (nth i methods))
       (if (operator-unifier-p method task) (setq methods-satisfied (cons (cons method (parameters-binding method task)) methods-satisfied)))
     ) (return-from method-satisfier (values methods-satisfied))
+      (format t "~%step-> method-satisfier: current satisfied methods list: ~A" (length methods-satisfied))
   )
 )
 ;----------------------------------------------------------------------------------------------
 ;;; substitution with unifier and replace the required variables within each update
 ;; unify variables 
-
-;;substitution: muss alle Variablen in action entsprechend Theta substituieren
-;; reminder: elements of theta: (?v . (truck . vehicle)) -> (variable.(entity.type))
 
 (defun action-substitute(action)
   (let ((action-name (hddl-action-name (first action))) ; NOOP
@@ -393,10 +439,58 @@
     effects-lst
   )
 )   
-;; task-substitute
-;;      
-(defun task-substitute(theta task)
+;; task
+;; input: theta->  ((?L3 CITY-LOC-1 LOCATION) (?V TRUCK-0 VEHICLE)) /task-params-> (?V ?L2 ?L3) or (?V ?L2)
+;; output: T/ Nil
+(defun task-substitute-p (theta task-type)
+  (let ((theta-type (mapcar #'third theta)))
+    ; (setq theta-type (mapcar #'third theta)) ; (LOCATION VEHICLE)
+    ; (mapcar #'(lambda(c)(push (second (assoc c method-params-types)) task-params-type)) task-params) ; (LOCATION LOCATION VEHICLE)
+    ; (format t "theta-type: ~A~% task-params-type: ~A" theta-type task-params-type)
+    (if 
+      (and (eq (length task-type) (length theta)) 
+           (equal (stable-sort (copy-seq theta-type) #'string<) (stable-sort (copy-seq task-type) #'string<)))
+      T
+      ; (format t "~%theta-type: ~A~% task-type: ~A" theta-type task-type)
+      nil)
+    )
+)
 
+;; task-substitute
+;; situation: 
+#|
+*Tasks* ->
+(#S(HDDL-TASK
+    :NAME DRIVE
+    :PARAMETERS (?V ?L2 ?L3)
+    :CONSTRAINTS (#S(HDDL-TASK
+                     :NAME GET-TO
+                     :PARAMETERS (?V ?L2)
+                     :CONSTRAINTS NIL)))
+ #S(HDDL-TASK :NAME GET-TO :PARAMETERS (?V ?L2) :CONSTRAINTS NIL)
+ #S(HDDL-TASK :NAME NOOP :PARAMETERS (?V ?L) :CONSTRAINTS NIL)
+ #S(HDDL-TASK :NAME GET-TO :PARAMETERS (TRUCK-0 CITY-LOC-1) :CONSTRAINTS NIL)
+ #S(HDDL-TASK :NAME GET-TO :PARAMETERS (TRUCK-0 CITY-LOC-0) :CONSTRAINTS NIL))|#
+;; input: theta ex.((?L3 CITY-LOC-1 LOCATION) (?V TRUCK-0 VEHICLE)) 
+;; output: update *Tasks*
+;; remove the length of parameters that is unsuitable for this situation & parse the parameters to each tasks 
+(defun task-substitute(theta)
+ (let ((method-params-list (mapcar #'hddl-method-parameters *methods*))
+      (method-params-types nil))
+  (mapcar #'(lambda(c)(mapcar #'(lambda(d) (push d method-params-types)) c)) method-params-list) #|((?L1 LOCATION) (?L2 LOCATION) (?V VEHICLE) (?L2 LOCATION) (?L3 LOCATION)(?V VEHICLE) (?L LOCATION) (?V VEHICLE))|#
+  
+  (loop for task in *Tasks* do
+     (let ((task-params (hddl-task-parameters task))
+           (task-params-type nil)
+           (theta-reversed (mapcar #'reverse theta))
+           (theta-type nil))
+       (mapcar #'(lambda(c) (push (second (assoc c method-params-types)) task-params-type)) task-params) ; (LOCATION LOCATION VEHICLE)
+       (if (task-substitute-p theta task-params-type) ; t or nil
+           ; t, substitute
+          (setf (hddl-task-parameters task) (mapcar #'(lambda(c) (second (assoc c theta-reversed))) (reverse task-params-type)))
+       )
+     )
+   ))
 )
 
 ;-------------------------------------------------------------
