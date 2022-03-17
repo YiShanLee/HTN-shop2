@@ -46,7 +46,7 @@ Contains only finished and tested functions and methods
 ;; second layer of shop2 
 ;; check primitive and restore the plan 
 (defun resolve-task () 
-  (if (primitivep *current-task*)
+  (if (primitivep)
     ; primitive (true)
     (update-primitive-task) 
     ; non-primitive (nil)  
@@ -55,9 +55,10 @@ Contains only finished and tested functions and methods
 )
 
 ;; third layer of shop2
+;; todo *actions* 
  ;; unify action and update state from primitive task
 (defun update-primitive-task ()
- (let* ((Actions-lst (action-satisfier *actions* *current-task*)))
+ (let* ((Actions-lst (action-satisfier)))
         (format t "~%step of update-primitive-task -> Actions-lst: ~A" Actions-lst)
                     (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
                           (t (update-action-values (nth (random (length Actions-lst)) Actions-lst)))
@@ -76,8 +77,26 @@ Contains only finished and tested functions and methods
          (constraint)
  ) 
 )
- 
- 
+
+;; unify methods and update state from nonprimitive task
+(defun update-nonprimitive-task ()
+ (let* ((Methods-lst (method-satisfier))) ; {(m . theta)...}  
+     (format t "~%step-> update-nonprimitive-task -> Methods-lst: ~A" (length Methods-lst))
+     (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
+            (t  (update-nonprimitive-values (nth (random (length Methods-lst)) Methods-lst)))) ; nondeterministically choose a pair (m, θ) ∈ M (random choose)
+ ) 
+)
+
+(defun update-nonprimitive-values (method)
+ (setq *Tasks* (cdr *Tasks*) ; modify T by removing t, (removin in constraint-lists happens later through constraining with subtasks!
+ subm (hddl-method-subtasks (car method))
+ theta (cadr method); in sub(m) to precede the tasks that t precede
+ subm (task-substitute theta subm)
+ *Tasks* (modify-constraints subm)) ;;constrain tasks with subtasks where appropriate
+   (format t "~%update-nonprimitive-values-> *Tasks*: ~A~% subtasks: ~A~% gewaehlte methode: ~A" *Tasks* subm method)
+   (append subm *Tasks*)  ;;adding sub(m) -> use append because push adds subtasks as list!
+ (if (not (null subm)) (setq *T0* (constraint subm))
+       (setq *T0* (constraint))))
  ;--------------------------------------
 ;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case
 ;;Input: if no tasklist is provided, the global tasklist is used as default value
@@ -88,6 +107,10 @@ Contains only finished and tested functions and methods
 		(if (null (hddl:hddl-task-constraints task)) 
 			(push task *T0*)))
   (reverse *T0*))
+
+:: todo: subtasks funktionieren nicht 
+;; modify-constraint
+
 
  ;----------------------------------------------
 ;; Modifies the constraint-lists of all tasks in *Tasks* by either removing every occurrence of *current-task* or if given a list of subtasks substituting every occurrence of *current-task* by that list
@@ -175,8 +198,8 @@ Contains only finished and tested functions and methods
         nil)
   )     
 ;---------------------------------------------
-(defun primitivep (task)
- (let ((taskname (hddl:hddl-task-name task))
+(defun primitivep ()
+ (let ((taskname (hddl:hddl-task-name *current-task*))
       (actionname))
   (loop for a in *actions* do
     (setq actionname (hddl:hddl-action-name a))
@@ -215,12 +238,12 @@ Contains only finished and tested functions and methods
      :NEG-EFFECTS NIL
      :POS-EFFECTS NIL)
   ((?L2 CITY-LOC-0 LOCATION) (?V TRUCK-0 VEHICLE))))|#
-(defun action-unifier (actions current-task)
+(defun action-unifier ()
   (let ((actions-satisfied nil))
-    (dotimes (i (length actions))
-      (setq action (nth i actions))
-      (if (operator-unifier-p action current-task) 
-          (setq actions-satisfied (cons (cons action (parameters-binding action current-task)) actions-satisfied))
+    (dotimes (i (length *actions*))
+      (setq action (nth i *actions*))
+      (if (operator-unifier-p action) 
+          (setq actions-satisfied (cons (cons action (parameters-binding action)) actions-satisfied))
           ) 
       ) (return-from action-unifier actions-satisfied) ;;{(a.theta)}
     (format t "~%step-> action-unifier: current unified actions list: ~A" actions-satisfied)
@@ -232,9 +255,9 @@ Contains only finished and tested functions and methods
 ;; output: actions list (unified with parameters and action's precondition satisfied with current-status)
 ;; action's precondition corrspond to current-status
 ;; leave out the satifying action list filtered by current-status
-(defun action-satisfier (actions current-task)
+(defun action-satisfier ()
   (let ((actions-satisfied nil)
-        (actions (action-unifier actions current-task))) ;;{(a.theta)}
+        (actions (action-unifier))) ;;{(a.theta)}
     (if actions
      (dotimes (i (length actions))
           (let* ((action (nth i actions))
@@ -296,9 +319,9 @@ Contains only finished and tested functions and methods
 ;; output: ((?V TRUCK-0 VEHICLE)) (?L2 CITY-LOC-0 LOCATION)) as theta
 ;; pass to action-satisfier or method-satisfier
 ; ----- todo method
-(defun parameters-binding (operator task)
+(defun parameters-binding (operator)
   (let ((op-param (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-parameters operator) (hddl-method-parameters operator))) ; ((?V VEHICLE) (?L2 LOCATION))
-        (task-params (hddl-task-parameters task)) ;(TRUCK-0 CITY-LOC-0)
+        (task-params (hddl-task-parameters *current-task*)) ;(TRUCK-0 CITY-LOC-0)
         (types (hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE)
         (binding-list nil))
     (dotimes (i (length task-params))
@@ -319,14 +342,28 @@ Contains only finished and tested functions and methods
 ;; output: True/ False
 ;; check name of tasks from action and current-task the same :: todo
 ;;       each parameter identical from operator (as action or method) and task 
-;; pass to next function as action-unifier or method-satisfier 
-(defun operator-unifier-p (operator task)
+;; pass to next function as action-satisfier or method-satisfier 
+(defun operator-unifier-p (operator)
   (let ((op-task-name (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-name operator) (first (hddl-method-task operator)))) 
         (op-params (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-parameters operator) (rest (hddl-method-task operator))))
-        (task-name (hddl-task-name task))
-        (task-params (hddl-task-parameters task))
+        (task-name (hddl-task-name *current-task*))
+        (task-params (hddl-task-parameters *current-task*))
         )
       (cond ((and (eql (type-of operator) 'HDDL-ACTION) (eq task-name op-task-name) (a-identical-parameters-p task-params op-params)) (return-from operator-unifier-p T))
             ((and (eql (type-of operator) 'HDDL-METHOD) (eq task-name op-task-name) (m-identical-parameters-p task-params op-params operator)) (return-from operator-unifier-p T))
             (t (return-from operator-unifier-p nil)))
   ))
+
+;; method-satisfier
+;; pre(m) to be seen as deprecated tuple
+;; output: {(method . theta)...}
+;--- todo parameters binding not in this block?
+(defun method-satisfier ()
+  (let ((methods-satisfied nil))
+    (dotimes (i (length *methods*))
+      (setq method (nth i *methods*))
+      (if (operator-unifier-p method) (setq methods-satisfied (cons (cons method (parameters-binding method)) methods-satisfied)))
+    ) (return-from method-satisfier (values methods-satisfied))
+      (format t "~%step-> method-satisfier: current satisfied methods list: ~A" (length methods-satisfied))
+  )
+)
