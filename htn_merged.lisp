@@ -115,18 +115,23 @@ Contains only finished and tested functions and methods
  ;----------------------------------------------
 ;; Modifies the constraint-lists of all tasks in *Tasks* by either removing every occurrence of *current-task* or if given a list of subtasks substituting every occurrence of *current-task* by that list
 ;; Input (optional): List of subtasks
-;; no output, modifies *Tasks* directly
+;; Output: *Tasks*
 (defun modify-constraints (&optional (subtasks nil))
-  (declare (optimize debug))
-(loop for task in *Tasks* do
-  (let ((constraints (hddl:hddl-task-constraints task))
-	(newconstraints ()))
-    (unless (null constraints)
-      (loop for c in constraints do
-	(if (equalp c *current-task*)
-	    (append subtasks newconstraints)
-	    (push c newconstraints)))
-      (setf (hddl:hddl-task-constraints task) newconstraints)))))
+  (loop for task in *Tasks* do
+    (let ((constraints (hddl:hddl-task-constraints task))
+	  (newconstraints ()))
+      (unless (null constraints)
+	(loop for c in constraints do
+	  (cond
+	    ;; if the constraint is the current-task
+	    ((equalp c *current-task*) 
+	     (setq newconstraints (append subtasks newconstraints)))
+	    ;;TODO: if the constraint has constraints itself loop through those too?
+	    ;;otherwise
+	    (t (setq newconstraints (push c newconstraints))
+	       (setq newconstraints (reverse newconstraints)))))
+	(setf (hddl:hddl-task-constraints task) newconstraints))))
+  *Tasks*)
 
  
  ;--------------------------------------------------------------
