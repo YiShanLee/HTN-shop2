@@ -27,7 +27,7 @@ Contains only finished and tested functions and methods
   (defparameter *current-task* nil)
   (defparameter *current-status* nil)
   (defparameter *Tasks* (hddl:hddl-problem-tasks *problem*))
-  (defparameter *theta* nil)  \
+  (defparameter *theta* nil)  
   (get-current-status)
 )
   
@@ -141,9 +141,9 @@ Contains only finished and tested functions and methods
 ;; input: current-status
 ;; output: current-status as hash-table
 (defun get-initial-status () 
- (let ((problem-types (hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
-      (current-status (hddl-problem-init-status *problem*)) #|((ROAD CITY-LOC-0 CITY-LOC-1) (ROAD CITY-LOC-1 CITY-LOC-0) (ROAD CITY-LOC-1 CITY-LOC-2) (ROAD CITY-LOC-2 CITY-LOC-1)(AT TRUCK-0 CITY-LOC-2))|#
-      (state-type (delete-duplicates (car (apply #'mapcar #'list (hddl-problem-init-status *problem*))))) ; (ROAD AT)
+ (let ((problem-types (hddl:hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
+      (current-status (hddl:hddl-problem-init-status *problem*)) #|((ROAD CITY-LOC-0 CITY-LOC-1) (ROAD CITY-LOC-1 CITY-LOC-0) (ROAD CITY-LOC-1 CITY-LOC-2) (ROAD CITY-LOC-2 CITY-LOC-1)(AT TRUCK-0 CITY-LOC-2))|#
+      (state-type (delete-duplicates (car (apply #'mapcar #'list (hddl:hddl-problem-init-status *problem*))))) ; (ROAD AT)
       (current-status-list (make-hash-table))
       (lis nil)) 
   (dotimes (i (length state-type))
