@@ -88,15 +88,16 @@ Contains only finished and tested functions and methods
 )
 
 (defun update-nonprimitive-values (method)
- (setq *Tasks* (cdr *Tasks*) ; modify T by removing t, (removin in constraint-lists happens later through constraining with subtasks!
- subm (hddl-method-subtasks (car method))
- theta (cadr method); in sub(m) to precede the tasks that t precede
- subm (task-substitute theta subm)
- *Tasks* (modify-constraints subm)) ;;constrain tasks with subtasks where appropriate
-   (format t "~%update-nonprimitive-values-> *Tasks*: ~A~% subtasks: ~A~% gewaehlte methode: ~A" *Tasks* subm method)
-   (append subm *Tasks*)  ;;adding sub(m) -> use append because push adds subtasks as list!
- (if (not (null subm)) (setq *T0* (constraint subm))
-       (setq *T0* (constraint))))
+   (setq *Tasks* (cdr *Tasks*) ; modify T by removing t, (removin in constraint-lists happens later through constraining with subtasks!
+   subm (copy-structure (hddl-method-subtasks (car method)))
+   theta (cadr method); in sub(m) to precede the tasks that t precede
+   subm (update-tasks subm) 
+   *Tasks* (modify-constraints subm)) ;;constrain tasks with subtasks where appropriate
+     (format t "~%update-nonprimitive-values-> *Tasks*: ~A~% subtasks: ~A~% gewaehlte methode: ~A" *Tasks* subm method)
+     (append subm *Tasks*)  ;;adding sub(m) -> use append because push adds subtasks as list!
+   (if (not (null subm)) (setq *T0* (constraint subm))
+         (setq *T0* (constraint))))
+
  ;--------------------------------------
 ;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case
 ;;Input: if no tasklist is provided, the global tasklist is used as default value
@@ -367,3 +368,25 @@ Contains only finished and tested functions and methods
       (format t "~%step-> method-satisfier: current satisfied methods list: ~A" (length methods-satisfied))
   )
 )
+
+;; tasks ;; update-tasks with three hierarchy test -todo
+(defun update-tasks (tasklist theta)
+     (mapcar #'(lambda(c)
+                   (cond ((hddl-task-constraints c) (and (task-substitute c theta) (setf (hddl-task-constraints c) (update-tasks (hddl-task-constraints c) theta)))); if subtask has constraints, push its task first to *Tasks*
+                         (t (task-substitute c theta)))) ; if there is no constraint push to *Tasks*
+                tasklist)
+    (return-from update-tasks tasklist)
+)
+
+
+(defun task-substitute(subtask theta)
+ (let ( 
+       (theta-params (mapcar 'car theta)) ;(?v ?l2)
+       (theta-dot-value (mapcar #'(lambda(c) (cons (car c) (cadr c))) theta)) ;((?V . TRUCK-0) (?L2 . CITY-LOC-1))
+       (task-params (hddl-task-parameters subtask)) ; (?V ?L2) (?V ?L)/ (?V ?L2 ?L3)
+       )
+  
+    (setf (hddl-task-parameters subtask) (sublis theta-dot-value task-params)) ;; if theta is subset of task-params, direct setf 
+           
+   ) 
+ )
