@@ -27,7 +27,7 @@ Contains only finished and tested functions and methods
   (defparameter *current-task* nil)
   (defparameter *current-status* nil)
   (defparameter *Tasks* (hddl:hddl-problem-tasks *problem*))
-  (defparameter *theta* nil)  \
+  (defparameter *theta* nil)  
   (get-current-status)
 )
   
@@ -116,18 +116,23 @@ Contains only finished and tested functions and methods
  ;----------------------------------------------
 ;; Modifies the constraint-lists of all tasks in *Tasks* by either removing every occurrence of *current-task* or if given a list of subtasks substituting every occurrence of *current-task* by that list
 ;; Input (optional): List of subtasks
-;; no output, modifies *Tasks* directly
+;; Output: *Tasks*
 (defun modify-constraints (&optional (subtasks nil))
-  (declare (optimize debug))
-(loop for task in *Tasks* do
-  (let ((constraints (hddl:hddl-task-constraints task))
-	(newconstraints ()))
-    (unless (null constraints)
-      (loop for c in constraints do
-	(if (equalp c *current-task*)
-	    (append subtasks newconstraints)
-	    (push c newconstraints)))
-      (setf (hddl:hddl-task-constraints task) newconstraints)))))
+  (loop for task in *Tasks* do
+    (let ((constraints (hddl:hddl-task-constraints task))
+	  (newconstraints ()))
+      (unless (null constraints)
+	(loop for c in constraints do
+	  (cond
+	    ;; if the constraint is the current-task
+	    ((equalp c *current-task*) 
+	     (setq newconstraints (append subtasks newconstraints)))
+	    ;;TODO: if the constraint has constraints itself loop through those too?
+	    ;;otherwise
+	    (t (setq newconstraints (push c newconstraints))
+	       (setq newconstraints (reverse newconstraints)))))
+	(setf (hddl:hddl-task-constraints task) newconstraints))))
+  *Tasks*)
 
  
  ;--------------------------------------------------------------
@@ -137,9 +142,9 @@ Contains only finished and tested functions and methods
 ;; input: current-status
 ;; output: current-status as hash-table
 (defun get-initial-status () 
- (let ((problem-types (hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
-      (current-status (hddl-problem-init-status *problem*)) #|((ROAD CITY-LOC-0 CITY-LOC-1) (ROAD CITY-LOC-1 CITY-LOC-0) (ROAD CITY-LOC-1 CITY-LOC-2) (ROAD CITY-LOC-2 CITY-LOC-1)(AT TRUCK-0 CITY-LOC-2))|#
-      (state-type (delete-duplicates (car (apply #'mapcar #'list (hddl-problem-init-status *problem*))))) ; (ROAD AT)
+ (let ((problem-types (hddl:hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
+      (current-status (hddl:hddl-problem-init-status *problem*)) #|((ROAD CITY-LOC-0 CITY-LOC-1) (ROAD CITY-LOC-1 CITY-LOC-0) (ROAD CITY-LOC-1 CITY-LOC-2) (ROAD CITY-LOC-2 CITY-LOC-1)(AT TRUCK-0 CITY-LOC-2))|#
+      (state-type (delete-duplicates (car (apply #'mapcar #'list (hddl:hddl-problem-init-status *problem*))))) ; (ROAD AT)
       (current-status-list (make-hash-table))
       (lis nil)) 
   (dotimes (i (length state-type))

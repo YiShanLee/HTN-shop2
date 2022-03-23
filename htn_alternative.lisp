@@ -132,18 +132,31 @@
  ;----------------------------------------------
 ;; Modifies the constraint-lists of all tasks in *Tasks* by either removing every occurrence of *current-task* or if given a list of subtasks substituting every occurrence of *current-task* by that list
 ;; Input (optional): List of subtasks
-;; no output, modifies *Tasks* directly
-(defun modify-constraints (&optional (subtasks nil))
-  (declare (optimize debug))
-(loop for task in *Tasks* do
-  (let ((constraints (hddl:hddl-task-constraints task))
-	(newconstraints ()))
-    (unless (null constraints)
-      (loop for c in constraints do
-	(if (equalp c *current-task*)
-	    (append subtasks newconstraints)
-	    (push c newconstraints)))
-      (setf (hddl:hddl-task-constraints task) newconstraints)))))
+;; Output: *Tasks*
+;;TODO: Achtung: im Test werden subtasks noch komplett verändert - schauen, ob es an einem Kopierfehler liegt!
+(defun modify-constraints (&optional (subtasks nil)(tasks *Tasks*))
+  (loop for task in tasks do
+    (let ((constraints (hddl:hddl-task-constraints task))
+	  (newconstraints ()))
+      (unless (null constraints)
+	(loop for c in constraints do
+	  (let ((cconstraints (hddl:hddl-task-constraints c)))
+	  (cond
+	    ;; if the constraint is the current-task and it has no more constraints,
+	    ;; append the subtasks to the list of newconstraints (but not the *current-task*
+	    ((equalp c *current-task*)
+	     (setq newconstraints (append subtasks newconstraints)))
+	    ((not(null cconstraints))
+	     (and
+	      (setq c (modify-constraints subtasks (list c)))
+	      ;;(setf (hddl:hddl-task-constraints c)(modify-constraints subtasks cconstraints))
+	      ;;(pprint (hddl:hddl-task-constraints c))
+	      (setq newconstraints (reverse (push c newconstraints)))))
+	    ;;otherwise push the *current-task to newconstraints
+	    (t (setq newconstraints (push c newconstraints))
+	       (setq newconstraints (reverse newconstraints))))))
+	(setf (hddl:hddl-task-constraints task) newconstraints))))
+  tasks)
 
 
 ;--------------------------------------------------------------
