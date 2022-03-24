@@ -259,7 +259,7 @@
 ;; leave out the satifying action list filtered by current-status
 (defun action-satisfier (actions)
   (let ((actions-satisfied nil)
-        (actions (action-unifier actions *current-task*))) ;;{(a.theta)}
+        (actions (action-unifier actions))) ;;{(a.theta)}
     (unless (null actions) 
      (dotimes (i (length actions))
           (let* ((action (nth i actions))
@@ -268,7 +268,7 @@
                 (preconditions nil)
 		 (variabled-action nil))
 
-	    (setq preconditions (precondition-substitute action-preconditions theta)) ;;ex. ((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
+	    (setq preconditions (precondition-substitute action-preconditions action-theta)) ;;ex. ((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
 	    
             ;; returns a list of actions that can be appended to the action-list, consisting of the input-action with all possible variable-bindings in theta that
 	    ;;satisfy the preconditions of the action, of the form ((action theta1).. (action thetaN)
@@ -331,16 +331,16 @@
 			    (pprint variabled-pre)
 			    ;;if there are no possible-variable-bindings for the precondition return nil -> cannot be satisfied under any circumstances
 			    (if (null variabled-pre) (return-from action-precondition-satisfier nil))
-			    
+			    (loop for b in variabled-pre do   ;;for every possible parameter-binding
+			      (pprint b)
+							      
+			      (let* ((new-theta (append theta b))  ;;new-theta is the old theta with the new variable-binding in the same form, ex. ((?V TRUCK-0 VEHICLE)
+				     (new-action (cons only-action new-theta))) ;; new-action is the action with the new theta
 			    (cond
-				  ;;if there are no other preconditions left, return a list of action with parameter-bindings added to theta
-				  ((null variabled-preconditions)
-				   (loop for b in variabled-pre do                                     ;;for every possible parameter-binding
-				        ;;new-theta is the old theta with the new variable-binding in the same form, ex. ((?V TRUCK-0 VEHICLE) (?L2 LOCATION CITY-LOC-1) (?L1 CITY-LOC-2 LOCATION))
-					    (let* ((new-theta (append theta b))  
-					      (new-action (cons only-action new-theta)))                      ;; new-action is the action with the new theta
-					     (setq actions-satisfied (push new-action actions-satisfied)));; push the new action to actions-satisfied
-					(return-from action-precondition-satisfier actions-satisfied)))  ;;list with action+new theta
+				  ;;if there are no other preconditions left push the new action to action-satisfied
+				  ((null variabled-preconditions)      
+					(setq actions-satisfied (push new-action actions-satisfied)))
+				  
 				  
 				  ;;otherwise if there are more preconditions with variables left, ex. (((ROAD ?L1 CITY-LOC-1) (1)))
 				  (T
@@ -348,17 +348,15 @@
 				   ;;recursively call action-precondition-satisfier with the action and variabled-preconditions
 				   ;; -> list of still unsatisfiede preconditions that now contain new variables and must be analysed again
 				   ;;(and(let ((preconditions (mapcar 'car variabled-preconditions))) ;; ex. ((ROAD ?L1 CITY-LOC-1))
-					  (loop for b in variabled-pre do             ;; ex. b= (((?L1 CITY-LOC-2 LOCATION)))
-					   (let*((new-theta (append theta b))  
-					          (new-action (cons only-action new-theta))
-						  (actions-satisfied-rec nil)
+					  ;;(loop for b in variabled-pre do             ;; ex. b= (((?L1 CITY-LOC-2 LOCATION)))
+					   (let*((actions-satisfied-rec nil)
 						  (substituted-preconditions nil)) 
 					      (setq substituted-preconditions (precondition-substitute preconditions b)) ;; ex. ((ROAD CITY-LOC-2 CITY-LOC-1))
 						 ;;recursively check if unsatisfied preconditions are now satisfied  
 					    (setq actions-satisfied-rec (action-precondition-satisfier new-action substituted-preconditions)) ;;nil or a list of satisfied actions (action theta)
                                              ;;if nil there was no way to satisfy the preconditions with this binding - do not add this to the actions-satisfied-rec- list
 					    (unless (null actions-satisfied-rec)
-					      (push actions-satisfied-rec actions-satisfied))))))))) ;;if the branch was succesful, push its new actions with theta to the return list, otherwise ignore
+					      (push actions-satisfied-rec actions-satisfied)))))))))) ;;if the branch was succesful, push its new actions with theta to the return list, otherwise ignore
 					(return-from action-precondition-satisfier actions-satisfied))) ;; might be nil if there was no branch that satisfied the preconditions
 
 	
@@ -653,13 +651,14 @@
 ;;       each parameter identical from operator (as action or method) and task 
 ;; pass to next function as action-satisfier or method-satisfier 
 (defun operator-unifier-p (operator)
-  (let ((op-task-name (if (eql (type-of operator) 'HDDL-ACTION) (hddl:hddl-action-name operator) (first (hddl:hddl-method-task operator)))) 
-        (op-params (if (eql (type-of operator) 'HDDL-ACTION) (hddl:hddl-action-parameters operator) (rest (hddl:hddl-method-task operator))))
+  (declare (optimize debug))
+  (let ((op-task-name (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION) (hddl:hddl-action-name operator) (first (hddl:hddl-method-task operator)))) 
+        (op-params (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION) (hddl:hddl-action-parameters operator) (rest (hddl:hddl-method-task operator))))
         (task-name (hddl:hddl-task-name *current-task*))
         (task-params (hddl:hddl-task-parameters *current-task*))
         )
-      (cond ((and (eql (type-of operator) 'HDDL-ACTION) (eq task-name op-task-name) (a-identical-parameters-p task-params op-params)) (return-from operator-unifier-p T))
-            ((and (eql (type-of operator) 'HDDL-METHOD) (eq task-name op-task-name) (m-identical-parameters-p task-params op-params operator)) (return-from operator-unifier-p T))
+      (cond ((and (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION) (eq task-name op-task-name) (a-identical-parameters-p task-params op-params)) (return-from operator-unifier-p T))
+            ((and (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-METHOD) (eq task-name op-task-name) (m-identical-parameters-p task-params op-params operator)) (return-from operator-unifier-p T))
             (t (return-from operator-unifier-p nil)))
   ))
 
