@@ -389,8 +389,7 @@ Contains only finished and tested functions and methods
        (theta-params (mapcar 'car theta)) ;(?v ?l2)
        (theta-dot-value (mapcar #'(lambda(c) (cons (car c) (cadr c))) theta)) ;((?V . TRUCK-0) (?L2 . CITY-LOC-1))
        (task-params (hddl-task-parameters subtask)) ; (?V ?L2) (?V ?L)/ (?V ?L2 ?L3)
-       )
-  
+       )=
     (setf (hddl-task-parameters subtask) (sublis theta-dot-value task-params)) ;; if theta is subset of task-params, direct setf 
            
    ) 
