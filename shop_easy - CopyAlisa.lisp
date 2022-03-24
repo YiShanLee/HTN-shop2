@@ -72,7 +72,7 @@
  (let* ((Actions-lst (action-satisfier *actions* *current-task*)))
         (format t "~%step of update-primitive-task -> Actions-lst: ~A" Actions-lst)
                     (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
-                          (t (update-action-values (nth (random (length Actions-lst)) Actions-lst)))
+                          (t (update-action-values (nth (random (length Actions-lst)) Actions-lst)))  ;;TODO: length-1? (1 2 3) -> Länge 3, aber letzte Position 2
                     )
   )
 )
@@ -101,7 +101,8 @@
  (let* ((Methods-lst (method-satisfier *methods* *current-task*))) ; {(m . theta)...}  
      (format t "~%step-> update-nonprimitive-task -> Methods-lst: ~A" (length Methods-lst))
      (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
-            (t  (update-nonprimitive-values (nth (random (length Methods-lst)) Methods-lst)))) ; nondeterministically choose a pair (m, θ) ∈ M (random choose)
+           (t  (update-nonprimitive-values (nth (random (length Methods-lst)) Methods-lst)))) ; nondeterministically choose a pair (m, θ) ∈ M (random choose)
+    ;;TODO: length-1? (1 2 3) -> Länge 3, aber letzte Position 2
  ) 
 )
  
@@ -272,11 +273,11 @@
           (let* ((action (nth i actions))
                 (action-preconditions (hddl:hddl-action-preconditions (first action))) ;(AT ?V ?L2)
                 (action-params (second action)) ; ((?V TRUCK-0 VEHICLE)) (?L2 CITY-LOC-0 LOCATION))
-                 ;; TODO:  binding parameters to precondition -> wir brauchen eingesetzte preconditions!
-		 ;;(action-preconditions ...) ;;set action-preconditions now to substituted preconditions (AT TRUCK-0 CITY-LOC-0)
+                 
                  (preconditions nil)
 		 (variabled-action nil))
-              ;;TODO: oder ist die nächste Zeile das binding?  
+              ;;;; TODO:  binding parameters to precondition -> wir brauchen eingesetzte preconditions!
+	      ;;(action-preconditions ...) ;;set action-preconditions now to substituted preconditions (AT TRUCK-0 CITY-LOC-0)oder ist die nächste Zeile das binding?  
             (setq preconditions (mapcar #'(lambda(c) (cons (first c) (mapcar 'second action-params))) action-preconditions))  ; (AT TRUCK-0 CITY-LOC-0)
            
             ;; returns a list of actions that can be appended to the action-list, consisting of the input-action with all possible variable-bindings in theta that
@@ -286,7 +287,7 @@
 	      (setq actions-satisfied (append variabled-action actions-satisfied))))))    ;;add the variabled-actions to the list of actions-satisfied
     
     (format t "~%step-> action-satisfier: current satisfied actions list: ~A" actions-satisfied)
-(return-from action-satisfier actions-satisfied)))
+(return-from action-satisfier actions-satisfied))) 
   #|((#S(HDDL-ACTION
      :NAME NOOP
      :PARAMETERS ((?V VEHICLE) (?L2 LOCATION))
@@ -444,7 +445,7 @@
       (let ((variable (first b))
 	    (typed (assoc (second b) types)))
 	(setq typed-binding (push (cons variable typed) typed-binding))))
-    typed-binding))
+    (reverse typed-binding)))
 	    
        
     
