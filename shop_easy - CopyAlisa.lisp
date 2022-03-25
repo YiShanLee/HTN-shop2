@@ -32,6 +32,7 @@
   (defparameter *current-task* nil)
   (defparameter *current-status* nil)
   (defparameter *Tasks* (hddl:hddl-problem-tasks *problem*))
+  (defparameter *lexicon* (make-lexicon))
   (defparameter *theta* nil)
   (get-current-status)
   )
@@ -153,6 +154,16 @@
     )
 )
 
+					;------
+(defun make-lexicon ()
+  (let ((lexicon nil)
+        (method-type nil))
+    (setq method-type (loop for m in *methods* collect
+              (hddl-method-parameters m)))
+    (setq method-type (delete-duplicates e1 :test #'eq :key 'car))
+    (setq lexicon (append method-type lexicon))
+    (setq lexicon (append (hddl-problem-objects *problem*) lexicon))
+  lexicon))
 
 ;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case
 ;;Input: if no tasklist is provided, the global tasklist is used as default value
@@ -445,14 +456,23 @@
   ;; Output: the list of action-preconditions with substituted variables according to theta, ex. ((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-1))
   (defun precondition-substitute (action-preconditions theta)
     (let ((precondlist nil))
-      (loop for p in action-preconditions do
-	 (let ((predicate (first p))
-	      (params (rest p))
-	      (substitutedp nil))
-	      (setq params (variable-substitute params theta)
-		    substitutedp (cons predicate params))
-	      (push substitutedp precondlist)))
-      (reverse precondlist))) 
+      (unless (listp (first action-preconditions))
+        (let ((predicate (first action-preconditions))
+                    (params (rest action-preconditions))
+                    (substitutedp nil))
+                    (setq params (variable-substitute params theta)
+                    substitutedp (cons predicate params))
+                    (push substitutedp precondlist))
+        (return-from precondition-substitute (reverse precondlist))
+        )
+        (loop for p in action-preconditions do
+               (let ((predicate (first p))
+                    (params (rest p))
+                    (substitutedp nil))
+                    (setq params (variable-substitute params theta)
+                    substitutedp (cons predicate params))
+                    (push substitutedp precondlist)))
+      (reverse precondlist)))
 
   ;; Input: list of parameter-variables, ex. (?V ?L), and a theta, ex. '((?V TRUCK-0 VEHICLE)(?L2 CITY-LOC-1 LOCATION))
   ;;Output: a list of substituted parameters where a substitution could be found, ex. (TRUCK-0 ?L)
