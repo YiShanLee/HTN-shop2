@@ -27,7 +27,7 @@ Contains only finished and tested functions and methods
   (defparameter *current-task* nil)
   (defparameter *current-status* nil)
   (defparameter *Tasks* (hddl:hddl-problem-tasks *problem*))
-  (defparameter *theta* nil)  
+  (defparameter *lexicon* (make-lexicon))  
   (get-current-status)
 )
   
@@ -136,8 +136,19 @@ Contains only finished and tested functions and methods
 	       (setq newconstraints (reverse newconstraints))))))
 	(setf (hddl:hddl-task-constraints task) newconstraints))))
   tasks)
+					;----
+;;makes a lexicon of all variables and constants in the domain & problem with their types, ex. ((?V VEHICLE)(TRUCK-0 VEHICLE))
+(defun make-lexicon ()
+  (let ((lexicon nil)
+        (method-type nil))
+    (setq method-type (loop for m in *methods* collect
+              (hddl:hddl-method-parameters m)))
+    (setq method-type (delete-duplicates e1 :test #'eq :key 'car))
+    (setq lexicon (append method-type lexicon))
+    (setq lexicon (append (hddl:hddl-problem-objects *problem*) lexicon))
+  lexicon))
 
- 
+
  ;--------------------------------------------------------------
 ;;; status CRUD
 ;; get-initial-status
@@ -454,7 +465,7 @@ Contains only finished and tested functions and methods
 ;; pass to action-satisfier or method-satisfier
 ; ----- todo method
 (defun parameters-binding (operator)
-  (let ((op-param (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-parameters operator) (hddl-method-parameters operator))) ; ((?V VEHICLE) (?L2 LOCATION))
+  (let ((op-param (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION) (hddl-action-parameters operator) (hddl-method-parameters operator))) ; ((?V VEHICLE) (?L2 LOCATION))
         (task-params (hddl-task-parameters *current-task*)) ;(TRUCK-0 CITY-LOC-0)
         (types (hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE)
         (binding-list nil))
@@ -463,7 +474,7 @@ Contains only finished and tested functions and methods
           (setq reversed-op-param (mapcar #'reverse op-param))
           (setq binding-list (cons (cons (cadr (assoc (cadr one-set) reversed-op-param)) one-set) binding-list))
           )
-    (if (eql (type-of operator) 'HDDL-ACTION)
+    (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION)
         (format t "~%step-> parameters-binding with action ~S" binding-list)
         (format t "~%step-> parameters-binding with method ~S" binding-list)
         )
@@ -478,13 +489,13 @@ Contains only finished and tested functions and methods
 ;;       each parameter identical from operator (as action or method) and task 
 ;; pass to next function as action-satisfier or method-satisfier 
 (defun operator-unifier-p (operator)
-  (let ((op-task-name (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-name operator) (first (hddl-method-task operator)))) 
-        (op-params (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-parameters operator) (rest (hddl-method-task operator))))
+  (let ((op-task-name (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION) (hddl-action-name operator) (first (hddl-method-task operator)))) 
+        (op-params (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION) (hddl-action-parameters operator) (rest (hddl-method-task operator))))
         (task-name (hddl-task-name *current-task*))
         (task-params (hddl-task-parameters *current-task*))
         )
-      (cond ((and (eql (type-of operator) 'HDDL-ACTION) (eq task-name op-task-name) (a-identical-parameters-p task-params op-params)) (return-from operator-unifier-p T))
-            ((and (eql (type-of operator) 'HDDL-METHOD) (eq task-name op-task-name) (m-identical-parameters-p task-params op-params operator)) (return-from operator-unifier-p T))
+      (cond ((and (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION) (eq task-name op-task-name) (a-identical-parameters-p task-params op-params)) (return-from operator-unifier-p T))
+            ((and (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-METHOD) (eq task-name op-task-name) (m-identical-parameters-p task-params op-params operator)) (return-from operator-unifier-p T))
             (t (return-from operator-unifier-p nil)))
   ))
 
@@ -529,7 +540,7 @@ Contains only finished and tested functions and methods
 ;; output: True / False
 ;; pass to next function as operator-unifier-p
 (defun m-identical-parameters-p (task-params m-task-params operator) ; (TRUCK-0 CITY-LOC-0) / (?v ?l2)
-  (let ((op-param (hddl-method-parameters operator)) ;((?V VEHICLE) (?L LOCATION))
+  (let ((op-param (hddl:hddl-method-parameters operator)) ;((?V VEHICLE) (?L LOCATION))
         (task-type nil))
        (setq task-type (mapcar #'(lambda(c)(second (assoc c *lexicon*))) task-params)) ; (VEHICLE LOCATION)
        (setq task-type (stable-sort task-type #'string<))  ;(LOCATION VEHICLE)

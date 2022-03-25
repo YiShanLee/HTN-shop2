@@ -33,7 +33,6 @@
   (defparameter *current-status* nil)
   (defparameter *Tasks* (hddl:hddl-problem-tasks *problem*))
   (defparameter *lexicon* (make-lexicon))
-  (defparameter *theta* nil)
   (get-current-status)
   )
 ;--------------------------------------------
@@ -159,10 +158,10 @@
   (let ((lexicon nil)
         (method-type nil))
     (setq method-type (loop for m in *methods* collect
-              (hddl-method-parameters m)))
+              (hddl:hddl-method-parameters m)))
     (setq method-type (delete-duplicates e1 :test #'eq :key 'car))
     (setq lexicon (append method-type lexicon))
-    (setq lexicon (append (hddl-problem-objects *problem*) lexicon))
+    (setq lexicon (append (hddl:hddl-problem-objects *problem*) lexicon))
   lexicon))
 
 ;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case
@@ -507,135 +506,7 @@
  (maphash #'print-hash-entry *current-status*)  
 )
 
-;------------------------------------------------
-;; make-lexicon of parameters and input values for all possible value
-;; input: method-params or action-params *((?V VEHICLE) (?L3 LOCATION) (?L2 LOCATION) (?L1 LOCATION)) /  ; ((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
-; (defun make-lexicon (operator)
-;   (let* ((types (hddl-problem-objects *problem*)) ; ((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
-;         (op-params (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-parameters operator) (hddl-method-parameters operator))) ;((?V VEHICLE) (?L3 LOCATION) (?L2 LOCATION) (?L1 LOCATION))
-;         (method-params-list (mapcar #'hddl-method-parameters *methods*)  ;((?V VEHICLE) (?L3 LOCATION) (?L2 LOCATION) (?L1 LOCATION) (?L LOCATION)) 
-;         (r-types (mapcar 'reverse types))      ; ((LOCATION CITY-LOC-2) (LOCATION CITY-LOC-1) (LOCATION CITY-LOC-0) (VEHICLE TRUCK-0))
-;         (r-params (mapcar 'reverse op-params)) ;((VEHICLE ?V) (LOCATION ?L3) (LOCATION ?L2) (LOCATION ?L1))
-;         (dotted-params (mapcar #'(lambda(c) (apply 'cons c)) r-params)) ;((VEHICLE . ?V) (LOCATION . ?L3) (LOCATION . ?L2) (LOCATION . ?L1))
-;         (classified-head (delete-duplicates (mapcar 'first r-params)))
-;         (newlist nil)
-;         )
-;     (dotimes (i (length r-params)) ; seperate to three group
-;         (push (sublis (list (pop dot-params)) r-types) newlist)
-;       )
-;     ;; version 1
-;     ; (setq newlist (delete-duplicates (flatten (apply 'mapcar 'list newlist))))
-;     #|
-;     ((?L1 CITY-LOC-2) (?L2 CITY-LOC-2) (LOCATION CITY-LOC-2) (?L1 CITY-LOC-1)
-;      (?L2 CITY-LOC-1) (LOCATION CITY-LOC-1) (?L1 CITY-LOC-0) (?L2 CITY-LOC-0)
-;      (LOCATION CITY-LOC-0) (VEHICLE TRUCK-0) (?V TRUCK-0))|#
-;     ;; version 2 : prefered 
-;     ; newlist 
-;     #|(((?L1 CITY-LOC-2) (?L1 CITY-LOC-1) (?L1 CITY-LOC-0) (VEHICLE TRUCK-0))
-;     ((?L2 CITY-LOC-2) (?L2 CITY-LOC-1) (?L2 CITY-LOC-0) (VEHICLE TRUCK-0))
-;     ((LOCATION CITY-LOC-2) (LOCATION CITY-LOC-1) (LOCATION CITY-LOC-0)
-;     (?V TRUCK-0)))|#
-;     ;; version 3
-;     ; (apply 'mapcar 'list newlist) 
-;     #|
-;     (((?L1 CITY-LOC-2) (?L2 CITY-LOC-2) (LOCATION CITY-LOC-2))
-;      ((?L1 CITY-LOC-1) (?L2 CITY-LOC-1) (LOCATION CITY-LOC-1))
-;      ((?L1 CITY-LOC-0) (?L2 CITY-LOC-0) (LOCATION CITY-LOC-0))
-;      ((VEHICLE TRUCK-0) (VEHICLE TRUCK-0) (?V TRUCK-0)))
-;     |#    
-    
-;     (defparameter *lexicon* newlist)
-;     newlist)
-; ) )
-; ;; destruct list of list to one list 
-; (defun flatten (li)
-;   (cond ((null li) nil)
-;      ( (= (length li) 2) `(,li))
-;      (t (mapcan #'flatten li)))
-;   )
 
-;; shortcut for first action check to quickly bound current known status to run
-;; if one action's precondition has already fulfilled the current-status and push this method to first-run tasks
-;; need: current-status, actions, substitution of action's precondition 
-;; if no positive effects, reluctant
-;; if positive effects, search for the task of the same action name from *Tasks*, do it first 
-;; get precondition from actions
-;; parameters-binding within one action
-;; input: *actions* & *current-status*
-;; output: 
-(defun quick-check ()
-  (let ((actions (copy-structure *actions*))
-        (pos-actions-list nil)
-        )
-    (mapcar #'(lambda(c) (if (hddl:hddl-action-pos-effects c) (push c pos-actions-list))) actions) ; get-actions that have postive effects
-    ;; follow the action's precondition to search for its corresponding current-status
-    (loop for pos-action in pos-actions-list
-          #|
-           #S(HDDL-ACTION
-            :NAME DRIVE
-            :PARAMETERS ((?V VEHICLE) (?L2 LOCATION) (?L1 LOCATION))
-            :PRECONDITIONS (AND (AT ?V ?L1) (ROAD ?L1 ?L2))
-            :NEG-EFFECTS ((AT ?V ?L1))
-            :POS-EFFECTS ((AT ?V ?L2)))
-          |#
-          do(
-             (let* ((precondition (remove-if-not 'consp (hddl:hddl-action-preconditions pos-action))) ;((AT ?V ?L1) (ROAD ?L1 ?L2))
-                   (precondition-head (mapcar 'first precondition))  ; (AT ROAD) 
-                   (pos-effect (hddl:hddl-action-pos-effects pos-action)) ; ((AT ?V ?L1))
-                   (neg-effect (hddl:hddl-action-neg-effects pos-action)) ; ((AT ?V ?L2))
-                   (action-params (hddl:hddl-action-parameters pos-action)) ; ((?V VEHICLE) (?L2 LOCATION) (?L1 LOCATION)) 
-                   (types (hddl:hddl-problem-objects *problem*)) ; ((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
-                   (theta-lists nil)
-                   (current-state nil))               
-            
-               ;; (if (gethash (first aa1) *current-status*) (nconc (rest (assoc (first aa1) aa)) (gethash (first aa1) *current-status*)) nil) **aa: ((AT ?V ?L1) (ROAD ?L1 ?L2)) **aa1 (AT ROAD) 
-               ;; precondition's parameter binding 
-               ; get current-status to leave out suited predicates 
-                (dotimes (i (length precondition-head))
-                  (let* ((predicate (nth i precondition-head))
-                        (status-lists (gethash predicate *current-status*))
-                        )
-                    (if status-lists
-                        ;; get all of the current-status with the same predicate
-                        (setq theta-lists (mapcar #'(lambda(status) (list* (cons predicate status))) status-lists))
-                        )
-                    )
-                  )              
-               ; if precondition true, then do substitute
-               )
-             )
-      )
-  )
-  )
-   #|current-status
-               ROAD ((CITY-LOC-0 CITY-LOC-1) (CITY-LOC-1 CITY-LOC-0) (CITY-LOC-1 CITY-LOC-2) (CITY-LOC-2 CITY-LOC-1))
-               AT ((TRUCK-0 CITY-LOC-2))
-               |#
-               #|(merge 'list t1 a1 #'eq :key #'cdr)
-                ((LOCATION CITY-LOC-2) (LOCATION CITY-LOC-1) (LOCATION CITY-LOC-0)
-                 (VEHICLE TRUCK-0) (VEHICLE ?V) (LOCATION ?L2) (LOCATION ?L1))
-                &
-                (setq newlist (make-list (length aa) :initial-element tt))
-                (((LOCATION CITY-LOC-2) (LOCATION CITY-LOC-1) (LOCATION CITY-LOC-0)
-                  (VEHICLE TRUCK-0))
-                 ((LOCATION CITY-LOC-2) (LOCATION CITY-LOC-1) (LOCATION CITY-LOC-0)
-                  (VEHICLE TRUCK-0))
-                 ((LOCATION CITY-LOC-2) (LOCATION CITY-LOC-1) (LOCATION CITY-LOC-0)
-                  (VEHICLE TRUCK-0)))
-                &
-                (apply #'mapcar #'list newlist)
-                (((LOCATION CITY-LOC-2) (LOCATION CITY-LOC-2) (LOCATION CITY-LOC-2))
-                 ((LOCATION CITY-LOC-1) (LOCATION CITY-LOC-1) (LOCATION CITY-LOC-1))
-                 ((LOCATION CITY-LOC-0) (LOCATION CITY-LOC-0) (LOCATION CITY-LOC-0))
-                 ((VEHICLE TRUCK-0) (VEHICLE TRUCK-0) (VEHICLE TRUCK-0)))
-                &
-                (delete-duplicates (mapcar 'first aa))
-                (VEHICLE LOCATION)
-                |#
-                #|
-                 (find (car (first a1)) t1 :key 'car)
-                  (VEHICLE TRUCK-0) 
-                |#
 ;------------------------------------------------------------------------------
 ; A ← {(a, θ) : a is a ground instance of an operator in D, 
 ;        θ is a substitution that unifies {head(a), t von problem}, 
@@ -647,7 +518,7 @@
 ;; pass to action-satisfier or method-satisfier
 ; ----- todo method
 (defun parameters-binding (operator)
-  (let ((op-param (if (eql (type-of operator) 'HDDL-ACTION) (hddl:hddl-action-parameters operator) (hddl:hddl-method-parameters operator))) ; ((?V VEHICLE) (?L2 LOCATION))
+  (let ((op-param (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION) (hddl:hddl-action-parameters operator) (hddl:hddl-method-parameters operator))) ; ((?V VEHICLE) (?L2 LOCATION))
         (task-params (hddl:hddl-task-parameters *current-task*)) ;(TRUCK-0 CITY-LOC-0)
         (types (hddl:hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE)
         (binding-list nil))
@@ -656,7 +527,7 @@
           (setq reversed-op-param (mapcar #'reverse op-param))
           (setq binding-list (cons (cons (cadr (assoc (cadr one-set) reversed-op-param)) one-set) binding-list))
           )
-    (if (eql (type-of operator) 'HDDL-ACTION)
+    (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION)
         (format t "~%step-> parameters-binding with action ~S" binding-list)
         (format t "~%step-> parameters-binding with method ~S" binding-list)
         )
@@ -683,17 +554,13 @@
   ))
 
 ;;; a-identical-parameters-p
-;; input: task parameters & action parameters (operator as action or method)
+;; input: task parameters (operator as action)
 ;; output: True / False
 ;; pass to next function as operator-unifier-p
-(defun a-identical-parameters-p (task-params op-params) ; (TRUCK-0 CITY-LOC-0) / ((?V VEHICLE) (?L2 LOCATION))
-  (let ((types (hddl:hddl-problem-objects *problem*))
-        (task-type nil)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE)
-  (dotimes (i (length task-params))
-      (setq one-set (assoc (nth i task-params) types)) ;(TRUCK-0 VEHICLE)
-      (setq task-type (cons (cadr one-set) task-type))
-    )
-  (setq op-type (cadr (apply #'mapcar #'list op-params))) ;(VEHICLE LOCATION) 
+(defun a-identical-parameters-p (task-params op-params) ; (TRUCK-0 CITY-LOC-0) or (TRUCK-0 ?L2) / ((?V VEHICLE) (?L2 LOCATION))
+  (let ((task-type nil))
+ (setq task-type (mapcar #'(lambda(c)(second (assoc c *lexicon*))) task-params)) ; (VEHICLE LOCATION)
+  (setq op-type (mapcar 'second op-params)) ;(VEHICLE LOCATION) 
   (cond
     ((not (eq (length task-type) (length op-type))) (return-from a-identical-parameters-p nil)) ; quick check and return 
     ((equal (stable-sort (copy-seq task-type) #'string<) (stable-sort (copy-seq op-type) #'string<)) (return-from a-identical-parameters-p T))
@@ -707,13 +574,12 @@
 ;; output: True / False
 ;; pass to next function as operator-unifier-p
 (defun m-identical-parameters-p (task-params m-task-params operator) ; (TRUCK-0 CITY-LOC-0) / (?v ?l2)
-  (let ((types (hddl:hddl-problem-objects *problem*)) ; ((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
-        (op-param (hddl:hddl-method-parameters operator)) ;((?V VEHICLE) (?L LOCATION))
+  (let ((op-param (hddl:hddl-method-parameters operator)) ;((?V VEHICLE) (?L LOCATION))
         (task-type nil))
-      (setq task-type (mapcar #'(lambda(c) (second (assoc c types))) task-params))
-      (setq task-type (sort task-type #'string<))  ;(LOCATION VEHICLE)
-      (setq m-task-params (mapcar #'(lambda(c) (second (assoc c op-param))) m-task-params)) ;(VEHICLE LOCATION)
-      (setq m-task-params (sort m-task-params #'string<))  ; (LOCATION VEHICLE)
+       (setq task-type (mapcar #'(lambda(c)(second (assoc c *lexicon*))) task-params)) ; (VEHICLE LOCATION)
+       (setq task-type (stable-sort task-type #'string<))  ;(LOCATION VEHICLE)
+      (setq m-task-params (mapcar #'(lambda(c) (second (assoc c *lexicon*))) m-task-params)) ;(VEHICLE LOCATION)
+      (setq m-task-params (stable-sort m-task-params #'string<))  ; (LOCATION VEHICLE)
   (cond 
     ((not (eq (length task-type) (length m-task-params))) (return-from m-identical-parameters-p nil)) ; quick check and return 
     ((equal task-type m-task-params) (return-from m-identical-parameters-p T))
@@ -965,104 +831,4 @@ before generating any other subtasks in the task network
 |#
 ;-------------------------------------------------------------
 
-;------------------------------------------------------------------------------------
-;;Alisa: unifier sollte am besten 
-;;1. alle actionen sammeln, die den gleichen Namen haben wie die task
-;;2. prüfen, ob die gleiche Anzahl Parameter vorliegt (Länge der Liste)
-;;3. prüfen, ob die Parameter den selben Typ haben (Reihenfolge in Parameterliste egal)
-;;4. die Parameter der task als theta ausgeben
-;; Ergebnis wäre dann eine Liste mit ((action . theta)(action . theta)...)
-;; hier würde ich also auch gar nicht jede action einzeln übergeben, sondern gleich alle auf einmal
 
-;;unifier sollte am besten 
-;;1. alle actionen sammeln, die den gleichen Namen haben wie die task
-;;2. prüfen, ob die gleiche Anzahl Parameter vorliegt (Länge der Liste)
-;;3. prüfen, ob die Parameter den selben Typ haben (Reihenfolge in Parameterliste egal)
-;;4. die Parameter der task als theta ausgeben
-;; Ergebnis wäre dann eine Liste mit ((action . theta)(action . theta)...)
-;; hier würde ich also auch gar nicht jede action einzeln übergeben, sondern gleich alle auf einmal
-
-;; für alle eingegebenen Aktionen prüfe, ob die preconditions einer Aktion im aktuellen Status erfüllt sind, falls ja, füge sie in Ergebnisliste ein
-;; preconditions sind dann erfüllt, wenn sie im aktuellen Status enthalten sind
-  ;; gibt es auch negative preconditions?
-  ;;Achtung: actions haben jetzt die Form (a. theta) 
-;--------------------------------------------------------------------- 
-
-;----------------------------------------------------------------------
-;okay 
-; ;;;parameters-binding (theta-binding)
-; ;; input: task & operator (as action or method)
-; ;; output: (?V TRUCK-0 VEHICLE)) (?L2 CITY-LOC-0 LOCATION)) as theta
-; ;; pass to method-satisfier
-; (defun parameters-binding (operator task)
-;   (let ((op-param (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-parameters operator) (hddl-method-parameters operator))) ; ((?V VEHICLE) (?L2 LOCATION))
-;         (task-params (hddl-task-parameters task)) ;(TRUCK-0 CITY-LOC-0)
-;         (types (hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE)
-;         (binding-list nil))
-;     (dotimes (i (length task-params))
-;           (setq one-set (assoc (nth i task-params) types)) ;(TRUCK-0 VEHICLE)
-;           (setq reversed-op-param (mapcar #'reverse op-param))
-;           (setq binding-list (cons (cons (cadr (assoc (cadr one-set) reversed-op-param)) one-set) binding-list))
-;           )
-;     (if (eql (type-of operator) 'HDDL-ACTION)
-;         (format t "step-> parameters-binding with action ~S" (list binding-list))
-;         (format t "step-> parameters-binding with method ~S" (list binding-list))
-;         )
-;     (return-from parameters-binding (list binding-list)) ; ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-0 LOCATION))
-;     )
-;   )
-
-; ;;; operator-unifier-p
-; ;; input: task & operator (as action or method)
-; ;; output: True/ False
-; ;; check name of tasks from action and current-task the same :: todo
-; ;;       each parameter identical from operator (as action or method) and task 
-; ;; pass to next function as method-satisfier 
-; (defun operator-unifier-p (operator task)
-;   (let ((op-task-name (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-name operator) (first (hddl-method-task operator))))
-;         (op-params (if (eql (type-of operator) 'HDDL-ACTION) (hddl-action-parameters operator) (hddl-method-parameters operator)))
-;         (task-name (hddl-task-name task))
-;         (task-params (hddl-task-parameters task))
-;         )
-;       (cond ((and (eql (type-of operator) 'HDDL-ACTION) (identical-parameters-p task-params op-params)) (return-from operator-unifier-p T))
-;             ((and (eql (type-of operator) 'HDDL-METHOD) (eq task-name op-task-name) (identical-parameters-p task-params op-params)) (return-from operator-unifier-p T))
-;             (t (return-from operator-unifier-p nil)))
-;   ))
-; ;;; identical-parameters-p
-; ;; input: task parameters & operator parameters (operator as action or method)
-; ;; output: True / False
-; ;; pass to next function as operator-unifier-p
-; (defun identical-parameters-p (task-params op-params) ; (TRUCK-0 CITY-LOC-0) / ((?V VEHICLE) (?L2 LOCATION))
-;   (let ((types (hddl-problem-objects *problem*))
-;         (task-type nil)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE)
-;   (dotimes (i (length task-params))
-;       (setq one-set (assoc (nth i task-params) types)) ;(TRUCK-0 VEHICLE)
-;       (setq task-type (cons (cadr one-set) task-type))
-;     )
-;   (setq op-type (cadr (apply #'mapcar #'list op-params))) ;(VEHICLE LOCATION)
-;   (setq op-type (sort op-type #'string<)) ; sort the ordering to compare string
-;   (setq task-type (sort task-type #'string<))  
-;   (cond
-;     ((not (eq (length task-type) (length op-type))) (return-from identical-parameters-p nil)) ; quick check and return 
-;     ((equal task-type op-type) (return-from identical-parameters-p T))
-;     (t (return-from identical-parameters-p nil)))
-;   )
-;   )
-
-; ;; method-satisfier
-; ;; pre(m) to be seen as deprecated tuple
-; ;; output: {(method . theta)...}
-; (defun method-satisfier (methods task)
-;   (let ((methods-satisfied nil))
-;     (dotimes (i (length methods))
-;       (setq method (nth i methods))
-;       (if (operator-unifier-p method task) (setq methods-satisfied (cons (cons method (parameters-binding method task)) methods-satisfied)))
-;     ) (return-from method-satisfier (values methods-satisfied))
-;   )
-; )
-;-----------------------------------------------------------------------------------------------------------------------------------------------
-; ; remove task from task list
-; (defun remove-task (current-task tasks)
-;   (setq tasks (remove current-task tasks))
-;   (return-from remove-task tasks)
-;   )
