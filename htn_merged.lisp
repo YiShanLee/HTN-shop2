@@ -218,19 +218,15 @@ Contains only finished and tested functions and methods
 ;---------------------------------------------
 ;; unifier & satisfier & substitute
 
-;;;action
+
 ;;; a-identical-parameters-p
-;; input: task parameters & action parameters (operator as action or method)
+;; input: task parameters (operator as action)
 ;; output: True / False
 ;; pass to next function as operator-unifier-p
-(defun a-identical-parameters-p (task-params op-params) ; (TRUCK-0 CITY-LOC-0) / ((?V VEHICLE) (?L2 LOCATION))
-  (let ((types (hddl:hddl-problem-objects *problem*))
-        (task-type nil)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE)
-  (dotimes (i (length task-params))
-      (setq one-set (assoc (nth i task-params) types)) ;(TRUCK-0 VEHICLE)
-      (setq task-type (cons (cadr one-set) task-type))
-    )
-  (setq op-type (cadr (apply #'mapcar #'list op-params))) ;(VEHICLE LOCATION) 
+(defun a-identical-parameters-p (task-params op-params) ; (TRUCK-0 CITY-LOC-0) or (TRUCK-0 ?L2) / ((?V VEHICLE) (?L2 LOCATION))
+  (let ((task-type nil))
+ (setq task-type (mapcar #'(lambda(c)(second (assoc c *lexicon*))) task-params)) ; (VEHICLE LOCATION)
+  (setq op-type (mapcar 'second op-params)) ;(VEHICLE LOCATION) 
   (cond
     ((not (eq (length task-type) (length op-type))) (return-from a-identical-parameters-p nil)) ; quick check and return 
     ((equal (stable-sort (copy-seq task-type) #'string<) (stable-sort (copy-seq op-type) #'string<)) (return-from a-identical-parameters-p T))
@@ -379,17 +375,26 @@ Contains only finished and tested functions and methods
 
   ;; Input: a list of action-preconditions, ex. ((AT ?V ?L1) (ROAD ?L1 ?L2)), and a theta
   ;; Output: the list of action-preconditions with substituted variables according to theta, ex. ((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-1))
-  (defun precondition-substitute (action-preconditions theta)
+   (defun precondition-substitute (action-preconditions theta)
     (let ((precondlist nil))
-      (loop for p in action-preconditions do
-	 (let ((predicate (first p))
-	      (params (rest p))
-	      (substitutedp nil))
-	      (setq params (variable-substitute params theta)
-		    substitutedp (cons predicate params))
-	      (push substitutedp precondlist)))
-      (reverse precondlist))) 
-
+      (unless (listp (first action-preconditions))
+        (let ((predicate (first action-preconditions))
+                    (params (rest action-preconditions))
+                    (substitutedp nil))
+                    (setq params (variable-substitute params theta)
+                    substitutedp (cons predicate params))
+                    (push substitutedp precondlist))
+        (return-from precondition-substitute (reverse precondlist))
+        )
+        (loop for p in action-preconditions do
+               (let ((predicate (first p))
+                    (params (rest p))
+                    (substitutedp nil))
+                    (setq params (variable-substitute params theta)
+                    substitutedp (cons predicate params))
+                    (push substitutedp precondlist)))
+      (reverse precondlist)
+      )) 
   ;; Input: list of parameter-variables, ex. (?V ?L), and a theta, ex. '((?V TRUCK-0 VEHICLE)(?L2 CITY-LOC-1 LOCATION))
   ;;Output: a list of substituted parameters where a substitution could be found, ex. (TRUCK-0 ?L)
   (defun variable-substitute (parameters theta)
@@ -517,3 +522,22 @@ Contains only finished and tested functions and methods
            
    ) 
  )
+;-------------------------------------------------------------------
+;;; m-identical-parameters-p
+;; check the value of current-task-parameters & method-task-parameters identical
+;; input: task parameters & method parameters
+;; output: True / False
+;; pass to next function as operator-unifier-p
+(defun m-identical-parameters-p (task-params m-task-params operator) ; (TRUCK-0 CITY-LOC-0) / (?v ?l2)
+  (let ((op-param (hddl-method-parameters operator)) ;((?V VEHICLE) (?L LOCATION))
+        (task-type nil))
+       (setq task-type (mapcar #'(lambda(c)(second (assoc c *lexicon*))) task-params)) ; (VEHICLE LOCATION)
+       (setq task-type (stable-sort task-type #'string<))  ;(LOCATION VEHICLE)
+      (setq m-task-params (mapcar #'(lambda(c) (second (assoc c *lexicon*))) m-task-params)) ;(VEHICLE LOCATION)
+      (setq m-task-params (stable-sort m-task-params #'string<))  ; (LOCATION VEHICLE)
+  (cond 
+    ((not (eq (length task-type) (length m-task-params))) (return-from m-identical-parameters-p nil)) ; quick check and return 
+    ((equal task-type m-task-params) (return-from m-identical-parameters-p T))
+    (t (return-from m-identical-parameters-p nil)))
+    )
+  )
