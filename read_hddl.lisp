@@ -221,13 +221,7 @@ The components of the  returned domain or problem can themselves contain other s
 	  (push (make-hddl-method :name name :parameters (typing parameters) :task task :subtasks subtasks :ordered-subtasks ordered) newmethods));;make HDDL-method and push to new methodslist
     (reverse newmethods)))
 
-;;Input: a list
-;;Output: the same list with removed "AND" if there was one
-(defun remove-and (list)
-  (let ((newlst nil))
-  (if (equal (string (car list)) "AND")
-      (setq newlst (cdr list))
-      (setq newlst list))))
+
 
 ;;Constrains subtasks of a method with each other if the method has ordered subtasks in such a way
 ;;that every subtask is constrained by the subtask(s) before it, to ensure that they are fulfilled in the exact given order.
@@ -310,5 +304,12 @@ The components of the  returned domain or problem can themselves contain other s
 	  (loop for v in variables do               ;;for every variable push the variable with the type as a list to the list of typed variables, example (?v vehicle)
 	     (push (cons v type) typedvariables))))
       typedvariables)))                           ;;return the list of all typed variables
-		   
 
+;;Takes a list that may begin with "AND" and returns the same list without and or the input list without changes if there was no "AND"		   
+;;Input: a list
+;;Output: the same list with removed "AND" if there was one
+(defun remove-and (list)
+  (let ((newlst nil))
+  (if (equal (string (car list)) "AND")
+      (setq newlst (cdr list))
+      (setq newlst list))))
