@@ -348,11 +348,12 @@
 			      (pprint b)
 							      
 			      (let* ((new-theta (append theta b))  ;;new-theta is the old theta with the new variable-binding in the same form, ex. ((?V TRUCK-0 VEHICLE)
-				     (new-action (cons only-action new-theta))) ;; new-action is the action with the new theta
-			    (cond
+				     (new-action (list only-action new-theta))) ;; new-action is the action with the new theta
+(pprint new-action)
+				(cond
 				  ;;if there are no other preconditions left push the new action to action-satisfied
 				  ((null variabled-preconditions)      
-					(setq actions-satisfied (push new-action actions-satisfied)))
+					(setq actions-satisfied (append actions-satisfied new-action)))
 				  
 				  
 				  ;;otherwise if there are more preconditions with variables left, ex. (((ROAD ?L1 CITY-LOC-1) (1)))
@@ -369,7 +370,7 @@
 					    (setq actions-satisfied-rec (action-precondition-satisfier new-action substituted-preconditions)) ;;nil or a list of satisfied actions (action theta)
                                              ;;if nil there was no way to satisfy the preconditions with this binding - do not add this to the actions-satisfied-rec- list
 					    (unless (null actions-satisfied-rec)
-					      (push actions-satisfied-rec actions-satisfied)))))))))) ;;if the branch was succesful, push its new actions with theta to the return list, otherwise ignore
+					      (setq actions-satisfied (append actions-satisfied actions-satisfied-rec))))))))))) ;;if the branch was succesful, push its new actions with theta to the return list, otherwise ignore
 					(return-from action-precondition-satisfier actions-satisfied))) ;; might be nil if there was no branch that satisfied the preconditions
 
 	
