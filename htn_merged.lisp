@@ -76,7 +76,7 @@ following commentary.
 (defun shop2-plan (&optional plan tasks state)
   (setq *T0* (constraint))
   (loop while *T0* do
-    (setq *current-task* (nth (random (length *T0*)) *T0*))
+    (setq *current-task* (car *T0*))
     (format t "~%step-> shop2-plan: *current-task*: ~A~% *T0*: ~A~%" *current-task* *T0*)
     (setq *T0* (cdr *T0*))
     (resolve-task)
