@@ -76,9 +76,10 @@ following commentary.
 (defun shop2-plan (&optional plan tasks state)
   (setq *T0* (constraint))
   (loop while *T0* do
-    (setq *current-task* (car *T0*))
+    (setq *current-task* (nth (random (length *T0*)) *T0*))
     (format t "~%step-> shop2-plan: *current-task*: ~A~% *T0*: ~A~%" *current-task* *T0*)
-    (setq *T0* (cdr *T0*))
+    ;;(setq *T0* (cdr *T0*))
+    (setq *T0* (remove *current-task* *T0*))
     (resolve-task)
   )     
   (if (null *Tasks*) 
@@ -117,7 +118,6 @@ following commentary.
  ) 
 )
 
-;; third layer of shop2 for compound tasks
 ;; unify methods and update state from nonprimitive task
 (defun update-nonprimitive-task ()
  (let* ((Methods-lst (method-satisfier))) ; {(m . theta)...}  
@@ -146,14 +146,18 @@ following commentary.
 ;;Input: no input, utilizes global parameters *methods* and *problems*
 ;;Output: a lexicon as a list of pairs whose first element is a variable or constant and
 ;;        whose second element is its type
+;; 
 (defun make-lexicon ()
   (let ((lexicon nil)
         (method-type nil))
-    (setq method-type (loop for m in *methods* collect
-              (hddl:hddl-method-parameters m)))
+    (mapcar #'(lambda(c)
+               (mapcar #'(lambda(d)
+                          (push d method-type))(hddl:hddl-method-parameters c))) 
+            *methods*)
     (setq method-type (delete-duplicates method-type :test #'eq :key 'car))
     (setq lexicon (append method-type lexicon))
     (setq lexicon (append (hddl:hddl-problem-objects *problem*) lexicon))
+    
   lexicon))
 
 ;;Gets the current status as a hastable. 
@@ -734,6 +738,7 @@ following commentary.
   )
 )
 
+; (task-substitute c) (setf (hddl-task-constraints c) (update-tasks (hddl-task-constraints c))
 ;; subtasks should not be the same list as tasks but should be a copy sequence from nonprimitive values
 (defun update-tasks (tasklist theta)
      (mapcar #'(lambda(c)
@@ -748,9 +753,10 @@ following commentary.
  (let ( 
        (theta-params (mapcar 'car theta)) ;(?v ?l2)
        (theta-dot-value (mapcar #'(lambda(c) (cons (car c) (cadr c))) theta)) ;((?V . TRUCK-0) (?L2 . CITY-LOC-1))
-       (task-params (hddl-task-parameters subtask)) ; (?V ?L2) (?V ?L)/ (?V ?L2 ?L3)
-       )=
-    (setf (hddl-task-parameters subtask) (sublis theta-dot-value task-params)) ;; if theta is subset of task-params, direct setf 
+       (task-params (hddl:hddl-task-parameters subtask)) ; (?V ?L2) (?V ?L)/ (?V ?L2 ?L3)
+       )
+  
+    (setf (hddl:hddl-task-parameters subtask) (sublis theta-dot-value task-params)) ;; if theta is subset of task-params, direct setf 
            
    ) 
  )
