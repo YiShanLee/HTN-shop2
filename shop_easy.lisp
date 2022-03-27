@@ -2,7 +2,6 @@
 (defun main-operator ()
   (read-input)
   (shop2-plan)
-  (planner-output)
   )
 (defun read-input (&optional (domain-path "domain.hddl") (problem-path "problem.hddl"))
 ; (defun read-input ()
@@ -24,21 +23,24 @@
   (defparameter *current-task* nil)
   (defparameter *current-status* nil)
   (defparameter *Tasks* (hddl:hddl-problem-tasks *problem*))
-  (defparameter *theta* nil)
   (defparameter *lexicon* (make-lexicon))
   (get-current-status)
   )
 ;--------------------------------------------
 ;; main method for first layer of shop2
-(defun shop2-plan (&optional plan tasks state theta)
-  (setq *T0* (constraint *Tasks*))
-  (loop while (not (null *T0*)) do
-    (if (null *Tasks*) (return *Plan*))
-    (setq *current-task* (car *T0*)
-          *T0* (cdr *T0*))
+(defun shop2-plan (&optional plan tasks state)
+  (setq *T0* (constraint))
+  (loop while *T0* do
+  ;   (if (null *Tasks*) 
+  ; (return-from shop2-plan *Plan*))
+    (setq *current-task* (nth (random (length *T0*)) *T0*))
     (format t "~%step-> shop2-plan: *current-task*: ~A~% *T0*: ~A~%" *current-task* *T0*)
+    (setq *T0* (cdr *T0*))
     (resolve-task)
-  ))  
+  )     
+  (if (null *Tasks*) 
+  (return-from shop2-plan (planner-output)))
+  )  
 ;; second layer of shop2 
 ;; check primitive and restore the plan 
 (defun resolve-task () 
@@ -72,12 +74,12 @@
 (defun update-action-values (action)
  (let* ((act (action-substitute action)) ; (NOOP TRUCK-0 CITY-LOC-2)
         )
-        (format t "~%step-> update-action-values")
          (modify-status action) ;; add pos-effect & delete neg-effect for current-status
-         (push act *Plan*)
-         (setq *Tasks* (cdr *Tasks*)) 
+         (setq *Plan* (append *Plan* act)) ;; frage ?? 
+         (setq *Tasks* (remove *current-task* *Tasks*)) 
          (modify-constraints)
          (constraint)
+         (format t "~%step-> update-action-values: *Plan*: ~A~% *T0*: ~A~%" *Plan* *T0*)
  ) 
 )
 ;; unify methods and update state from nonprimitive task
@@ -98,11 +100,12 @@
 (defun update-nonprimitive-values (method)
    (setq *Tasks* (cdr *Tasks*) ; modify T by removing t, (removin in constraint-lists happens later through constraining with subtasks!
           subm (copy-seq (hddl:hddl-method-subtasks (car method)))
-          theta (cadr method); in sub(m) to precede the tasks that t precede
-          subm (update-tasks subm theta) 
+          theta (cadr method)); in sub(m) to precede the tasks that t precede
+    (format t "~%update-nonprimitive-values->theta: ~A~% gewaehlte methode: ~A" theta method)
+    (setq  subm (update-tasks subm theta) 
           *Tasks* (modify-constraints subm)) ;;constrain tasks with subtasks where appropriate
      (format t "~%update-nonprimitive-values-> *Tasks*: ~A~% subtasks: ~A~% gewaehlte methode: ~A" *Tasks* subm method)
-     (push subm *Tasks*)  ;;adding sub(m) -> use append because push adds subtasks as list!
+     (setq *Tasks* (append subm *Tasks*))  ;;adding sub(m) -> use append because push adds subtasks as list!
    (if (not (null subm)) (setq *T0* (constraint subm))
          (setq *T0* (constraint))))
 
@@ -229,7 +232,6 @@
     (setq effect (nth i pos-effects))
     (if (null (gethash (first effect) *current-status*))
         (setf (gethash (first effect)) (rest effect))
-        
         (let ((value1 (gethash (first effect) *current-status*)))
               (setf (gethash (first effect) *current-status*) (cons (rest effect) value1)))))
   )
@@ -257,34 +259,6 @@
  
 ;---------------------------------------------------------------------------
 
-
-;; action-satisfier
-;; input: actions & current-task
-;; output: actions list (unified with parameters and action's precondition satisfied with current-status)
-;; action's precondition corrspond to current-status
-;; leave out the satifying action list filtered by current-status
-(defun action-satisfier ()
-  (let ((actions-satisfied nil)
-        (actions (action-unifier))) ;;{(a.theta)}
-    (unless (null actions) 
-     (dotimes (i (length actions))
-          (let* ((action (nth i actions))
-                (action-preconditions (hddl:hddl-action-preconditions (first action))) ;((AT ?V ?L1) (ROAD ?L1 ?L2))
-                (action-theta (second action)) ; ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-0 LOCATION))  
-                (preconditions nil)
-     (variabled-action nil))
-
-      (setq preconditions (precondition-substitute action-preconditions action-theta)) ;;ex. ((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
-      
-            ;; returns a list of actions that can be appended to the action-list, consisting of the input-action with all possible variable-bindings in theta that
-      ;;satisfy the preconditions of the action, of the form ((action theta1).. (action thetaN)
-      (setq variabled-action (action-precondition-satisfier action preconditions))   ;;ex. (action theta)((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
-            (unless (null variabled-action)                                 ;;unless the list is emtpy -> there is no possibility for the action-preconditions to be fulfilled
-        (setq actions-satisfied (append variabled-action actions-satisfied))))))   ;;add the variabled-actions to the list of actions-satisfied
-    
-    (format t "~%step-> action-satisfier: current satisfied actions list: ~A" actions-satisfied)
-(return-from action-satisfier actions-satisfied)))
-
 ;------------------------------------------------
 ;; 
 (defun make-lexicon ()
@@ -304,26 +278,21 @@
 ;; input: task & operator (as action or method)
 ;; output: ((?V TRUCK-0 VEHICLE)) (?L2 CITY-LOC-0 LOCATION)) as theta
 ;; pass to action-satisfier or method-satisfier
-;; change: if theta inside a method, then the formation of theta should follow the form from method-theta. so we can substitute the theta directly. 
 (defun parameters-binding (operator)
-  (let ((op-param (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION) (hddl:hddl-action-parameters operator) (hddl:hddl-method-parameters operator))) ; ((?V VEHICLE) (?L2 LOCATION))
-        (task-params (hddl:hddl-task-parameters *current-task*)) ;(TRUCK-0 CITY-LOC-0)
-        (types (hddl:hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE)
-        (binding-list nil))
+  (let* ((op-params (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION) (hddl:hddl-action-parameters operator) 
+                      (hddl:hddl-method-parameters operator))) ; ((?V VEHICLE) (?L1 LOCATION) (?L2 LOCATION))
+        (task-params (hddl:hddl-task-parameters *current-task*)) ;(TRUCK-0 CITY-LOC-0) or (TRUCK-0 CITY-LOC-0 ?L2)
+        (op-variables (mapcar 'car op-params))
+        (binding-list nil)
+        (variable-position-list (mapcar #'(lambda(c)(search "?" c)) (mapcar 'symbol-name task-params))))
     
     (dotimes (i (length task-params))
-      (setq one-set (assoc (nth i task-params) types)) ;(TRUCK-0 VEHICLE)
-      (setq reversed-op-param (mapcar #'reverse op-param))
-      (setq binding-list (cons (cons (cadr (assoc (cadr one-set) reversed-op-param)) one-set) binding-list))
-        )
-    (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION)
-        (format t "~%step-> parameters-binding with action ~S" binding-list)
-        (format t "~%step-> parameters-binding with method ~S" binding-list)
-        )
-    (return-from parameters-binding (list (reverse binding-list))) ; (((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-1 LOCATION)))
-    )
-  )
-
+      (if (not (equal 0 (nth i variable-position-list)))
+          (push (list (first (nth i op-params)) (nth i task-params) (second (nth i op-params))) binding-list)
+          ))
+  
+  (reverse binding-list))
+)
 ;;; operator-unifier-p
 ;; input: task & operator (as action or method)
 ;; output: True/ False
@@ -393,19 +362,26 @@
     (dotimes (i (length *actions*))
       (setq action (nth i *actions*))
       (if (operator-unifier-p action) 
-          (setq actions-satisfied (cons (cons action (parameters-binding action)) actions-satisfied))
+          (setq actions-satisfied (push (list action (parameters-binding action)) actions-satisfied))
           ) 
       ) (return-from action-unifier actions-satisfied) ;;{(a.theta)}
     (format t "~%step-> action-unifier: current unified actions list: ~A" actions-satisfied)
     )
   )
-;3/26 actions is unbound
+#| ((#S(READ-HDDL-PACKAGE::HDDL-ACTION
+     :NAME DRIVE
+     :PARAMETERS ((?V VEHICLE) (?L1 LOCATION) (?L2 LOCATION))
+     :PRECONDITIONS ((AT ?V ?L1) (ROAD ?L1 ?L2))
+     :NEG-EFFECTS ((AT ?V ?L1))
+     :POS-EFFECTS ((AT ?V ?L2)))
+  ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-1 LOCATION)))) |#
 ;; action-satisfier
-;; input: actions 
+;; input: actions & current-task
 ;; output: actions list (unified with parameters and action's precondition satisfied with current-status)
 ;; action's precondition corrspond to current-status
 ;; leave out the satifying action list filtered by current-status
 (defun action-satisfier ()
+  (declare (optimize debug))
   (let ((actions-satisfied nil)
         (actions (action-unifier))) ;;{(a.theta)}
     (unless (null actions) 
@@ -414,18 +390,34 @@
                 (action-preconditions (hddl:hddl-action-preconditions (first action))) ;((AT ?V ?L1) (ROAD ?L1 ?L2))
                 (action-theta (second action)) ; ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-0 LOCATION))  
                 (preconditions nil)
-                (variabled-action nil))
-
-      (setq preconditions (precondition-substitute action-preconditions action-theta)) ;;ex. ((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
-      
+         (variabled-action nil))
+        (setq preconditions (precondition-substitute action-preconditions action-theta)) ;;ex. ((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
+        (format t "~%step-> action-satisfier: preconditions : ~A" preconditions)
             ;; returns a list of actions that can be appended to the action-list, consisting of the input-action with all possible variable-bindings in theta that
-      ;;satisfy the preconditions of the action, of the form ((action theta1).. (action thetaN)
-      (setq variabled-action (action-precondition-satisfier action preconditions))   ;;ex. (action theta)((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
+        ;;satisfy the preconditions of the action, of the form ((action theta1).. (action thetaN)
+        (setq variabled-action (action-precondition-satisfier action preconditions))   ;;ex. (action theta)((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
+        (format t "~%step-> action-satisfier: variabled-action  : ~A" variabled-action)
             (unless (null variabled-action)                                 ;;unless the list is emtpy -> there is no possibility for the action-preconditions to be fulfilled
-        (setq actions-satisfied (append variabled-action actions-satisfied))))))   ;;add the variabled-actions to the list of actions-satisfied
-    
+          (setq actions-satisfied (append variabled-action actions-satisfied))))))   ;;add the variabled-actions to the list of actions-satisfied
     (format t "~%step-> action-satisfier: current satisfied actions list: ~A" actions-satisfied)
 (return-from action-satisfier actions-satisfied)))
+ #|  (((#S(READ-HDDL-PACKAGE::HDDL-ACTION
+      :NAME DRIVE
+      :PARAMETERS ((?V VEHICLE) (?L1 LOCATION) (?L2 LOCATION))
+      :PRECONDITIONS ((AT ?V ?L1) (ROAD ?L1 ?L2))
+      :NEG-EFFECTS ((AT ?V ?L1))
+      :POS-EFFECTS ((AT ?V ?L2)))
+   ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-1 LOCATION) (?L1 CITY-LOC-2 LOCATION))))) |#
+  
+  
+  
+  #|((#S(HDDL-ACTION
+     :NAME NOOP
+     :PARAMETERS ((?V VEHICLE) (?L2 LOCATION))
+     :PRECONDITIONS (AT ?V ?L2)
+     :NEG-EFFECTS NIL
+     :POS-EFFECTS NIL)
+  ((?L2 CITY-LOC-0 LOCATION) (?V TRUCK-0 VEHICLE))))|#
 
 
 ;; method-satisfier
@@ -436,7 +428,7 @@
   (let ((methods-satisfied nil))
     (dotimes (i (length *methods*))
       (setq method (nth i *methods*))
-      (if (operator-unifier-p method) (setq methods-satisfied (cons (cons method (parameters-binding method)) methods-satisfied)))
+      (if (operator-unifier-p method) (setq methods-satisfied (push (list method (parameters-binding method)) methods-satisfied)))
     ) (and (return-from method-satisfier (values methods-satisfied))
           (format t "~%step-> method-satisfier: current satisfied methods list: ~A" (length methods-satisfied)))
   )
@@ -448,11 +440,11 @@
 ;; unify variables 
 (defun action-substitute(action)
   (let ((action-name (hddl:hddl-action-name (first action))) ; NOOP
-        (action-params (hddl:hddl-action-parameters (first action))) ;((?V VEHICLE) (?L2 LOCATION))
+        (action-params (mapcar 'car (hddl:hddl-action-parameters (first action)))) ;(?V ?L2)
         (theta (second action)) ; ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-1 LOCATION))
         (action-head nil)    
         )
-    (setq action-head (cons action-name (mapcar 'second theta))) ;(NOOP TRUCK-0 CITY-LOC-1)
+    (setq action-head (cons action-name (variable-substitute action-params theta))) ;(NOOP TRUCK-0 CITY-LOC-1)
   action-head
   )
 )   
@@ -622,7 +614,9 @@ TASK-P:   (?V ?L2 ?L3)
 ;                      (actual-input condition)))))
 ;-------------------------------------------------------------
 (defun planner-output ()
-  (format t "Shop2-operator finds current possible plan as ~S" *Plan*))
+  (if *Plan*
+  (format t "Shop2-operator finds the following current possible plan:~% ~A" *Plan*)
+  (format t "Shop2-operator cannot find a plan for this problem.~% Please check that your HDDL problem file is solvable with your domain file.")))
 ;;; illustration from thesis
 #|
 The first case is if t is primitive, i.e., 
@@ -768,32 +762,6 @@ before generating any other subtasks in the task network
            
 ;      (return-from find-state-p unsatisfied))
 ;     (format t "~%steo: find-state-p: ~A" unsatisfied))
-;; action-satisfier
-;; input: actions & current-task
-;; output: actions list (unified with parameters and action's precondition satisfied with current-status)
-;; action's precondition corrspond to current-status
-;; leave out the satifying action list filtered by current-status
-(defun action-satisfier ()
-  (let ((actions-satisfied nil)
-        (actions (action-unifier actions))) ;;{(a.theta)}
-    (unless (null actions) 
-     (dotimes (i (length actions))
-          (let* ((action (nth i actions))
-                (action-preconditions (hddl:hddl-action-preconditions (first action))) ;((AT ?V ?L1) (ROAD ?L1 ?L2))
-                (action-theta (second action)) ; ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-0 LOCATION))  
-                (preconditions nil)
-     (variabled-action nil))
-
-      (setq preconditions (precondition-substitute action-preconditions action-theta)) ;;ex. ((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
-      
-            ;; returns a list of actions that can be appended to the action-list, consisting of the input-action with all possible variable-bindings in theta that
-      ;;satisfy the preconditions of the action, of the form ((action theta1).. (action thetaN)
-      (setq variabled-action (action-precondition-satisfier action preconditions))   ;;ex. (action theta)((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
-            (unless (null variabled-action)                                 ;;unless the list is emtpy -> there is no possibility for the action-preconditions to be fulfilled
-        (setq actions-satisfied (append variabled-action actions-satisfied))))))   ;;add the variabled-actions to the list of actions-satisfied
-    
-    (format t "~%step-> action-satisfier: current satisfied actions list: ~A" actions-satisfied)
-(return-from action-satisfier actions-satisfied)))
   #|((#S(HDDL-ACTION
      :NAME NOOP
      :PARAMETERS ((?V VEHICLE) (?L2 LOCATION))
@@ -818,65 +786,119 @@ before generating any other subtasks in the task network
    :NEG-EFFECTS ((AT ?V ?L1))
    :POS-EFFECTS ((AT ?V ?L2))) ((?V TRUCK-0 VEHICLE)(?L2 CITY-LOC-1 LOCATION)(?L1 CITY-LOC-2 LOCATION)))
 |#
+#| ((#S(READ-HDDL-PACKAGE::HDDL-ACTION
+     :NAME DRIVE
+     :PARAMETERS ((?V VEHICLE) (?L1 LOCATION) (?L2 LOCATION))
+     :PRECONDITIONS ((AT ?V ?L1) (ROAD ?L1 ?L2))
+     :NEG-EFFECTS ((AT ?V ?L1))
+     :POS-EFFECTS ((AT ?V ?L2)))
+  ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-1 LOCATION)))) |#
+; (defun action-precondition-satisfier (action preconditions)
+;   (let ((only-action (first action))
+;   (theta (second action))
+;   (unsatisfied-preconditions nil)
+;   (variabled-preconditions nil)
+;   (actions-satisfied nil)) ;;the list of actions to be returned
+
+;     (setq unsatisfied-preconditions (find-unsatisfied-preconditions preconditions)) ;;takes a list of preconditions and returns only unsatisfied ones,ex. ((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-1))
+;       (cond
+;         ;;if there are no unsatisfied preconditions, add the action to the list of satisfied actions and return it -> all preconditions satisfied, no additional steps needed
+;         ((null unsatisfied-preconditions)
+;          (setq actions-satisfied (cons action actions-satisfied))
+;          (return-from action-precondition-satisfier actions-satisfied))
+;         ;;otherwise if there are unsatisfied preconditions
+;         ;;check if all preconditions in unsatisfied contain variables  -> returns nil otherwise
+;         (T (setq variabled-preconditions (all-contain-variables unsatisfied-preconditions)) ;;ex. (((AT TRUCK-0 ?L1) (2)) ((ROAD ?L1 CITY-LOC-1) (1)))
+          
+;   ;;if variabled-preconditions is null, return nil immediately, because there is at least one precondition without variables that cannot be satisfied
+;           (when (null variabled-preconditions)
+;         (return-from action-precondition-satisfier nil))
+
+;         (let* ((variabled-pre nil)                      ;;from the list of variable-preconditions ex. (((AT TRUCK-0 ?L1) (2)) ((ROAD ?L1 CITY-LOC-1) (1)))
+;         (pre (first variabled-preconditions))   ;;take the first precondition to work with, ex.((AT TRUCK-0 ?L1) (2)) 
+;          (variabled-preconditions (mapcar 'car (rest variabled-preconditions)))) ;;take the rest of the preconditions for later, ex. (((ROAD ?L1 CITY-LOC-1) (1)))
+          
+;           (setq variabled-pre (get-variables pre))  ;;get all possible variable-bindings for the first precondition, ex. (((?L1 CITY-LOC-2 LOCATION)))
+;           (pprint variabled-pre)
+;           ;;if there are no possible-variable-bindings for the precondition return nil -> cannot be satisfied under any circumstances
+;           (if (null variabled-pre) (return-from action-precondition-satisfier nil))
+;           (loop for b in variabled-pre do   ;;for every possible parameter-binding
+;             (pprint b)
+                    
+;             (let* ((new-theta (append theta b))  ;;new-theta is the old theta with the new variable-binding in the same form, ex. ((?V TRUCK-0 VEHICLE)
+;              (new-action (list only-action new-theta))) ;; new-action is the action with the new theta
+;           (cond
+;           ;;if there are no other preconditions left push the new action to action-satisfied
+;           ((null variabled-preconditions)      
+;           (setq actions-satisfied (append actions-satisfied new-action)))
+          
+          
+;           ;;otherwise if there are more preconditions with variables left, ex. (((ROAD ?L1 CITY-LOC-1) (1)))
+;           (T
+;            ;;for every possible variable-binding in variabled-pre bind it to every precondition still in variabled-preconditions and then
+;            ;;recursively call action-precondition-satisfier with the action and variabled-preconditions
+;            ;; -> list of still unsatisfiede preconditions that now contain new variables and must be analysed again
+;            ;;(and(let ((preconditions (mapcar 'car variabled-preconditions))) ;; ex. ((ROAD ?L1 CITY-LOC-1))
+;             ;;(loop for b in variabled-pre do             ;; ex. b= (((?L1 CITY-LOC-2 LOCATION)))
+;              (let*((actions-satisfied-rec nil)
+;               (substituted-preconditions nil)) 
+;                 (setq substituted-preconditions (precondition-substitute preconditions b)) ;; ex. ((ROAD CITY-LOC-2 CITY-LOC-1))
+;              ;;recursively check if unsatisfied preconditions are now satisfied  
+;               (setq actions-satisfied-rec (action-precondition-satisfier new-action substituted-preconditions)) ;;nil or a list of satisfied actions (action theta)
+;                                              ;;if nil there was no way to satisfy the preconditions with this binding - do not add this to the actions-satisfied-rec- list
+;               (unless (null actions-satisfied-rec)
+;                 (setq actions-satisfied (append actions-satisfied actions-satisfied-rec))))))))))) ;;if the branch was succesful, push its new actions with theta to the return list, otherwise ignore
+;           (return-from action-precondition-satisfier actions-satisfied))) ;; might be nil if there was no branch that satisfied the preconditions
+
 (defun action-precondition-satisfier (action preconditions)
   (let ((only-action (first action))
-  (theta (second action))
-  (unsatisfied-preconditions nil)
-  (variabled-preconditions nil)
-  (actions-satisfied nil)) ;;the list of actions to be returned
-
+    (theta (second action))
+    (unsatisfied-preconditions nil)
+    (variabled-preconditions nil)
+    (actions-satisfied nil)) ;;the list of actions to be returned
     (setq unsatisfied-preconditions (find-unsatisfied-preconditions preconditions)) ;;takes a list of preconditions and returns only unsatisfied ones,ex. ((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-1))
-      (cond
-        ;;if there are no unsatisfied preconditions, add the action to the list of satisfied actions and return it -> all preconditions satisfied, no additional steps needed
-        ((null unsatisfied-preconditions)
-         (setq actions-satisfied (cons action actions-satisfied))
-         (return-from action-precondition-satisfier actions-satisfied))
-        ;;otherwise if there are unsatisfied preconditions
-        ;;check if all preconditions in unsatisfied contain variables  -> returns nil otherwise
-        (T (setq variabled-preconditions (all-contain-variables unsatisfied-preconditions)) ;;ex. (((AT TRUCK-0 ?L1) (2)) ((ROAD ?L1 CITY-LOC-1) (1)))
-          
-  ;;if variabled-preconditions is null, return nil immediately, because there is at least one precondition without variables that cannot be satisfied
-          (when (null variabled-preconditions)
-        (return-from action-precondition-satisfier nil))
-
-        (let* ((variabled-pre nil)                      ;;from the list of variable-preconditions ex. (((AT TRUCK-0 ?L1) (2)) ((ROAD ?L1 CITY-LOC-1) (1)))
-        (pre (first variabled-preconditions))   ;;take the first precondition to work with, ex.((AT TRUCK-0 ?L1) (2)) 
-         (variabled-preconditions (mapcar 'car (rest variabled-preconditions)))) ;;take the rest of the preconditions for later, ex. (((ROAD ?L1 CITY-LOC-1) (1)))
-          
-          (setq variabled-pre (get-variables pre))  ;;get all possible variable-bindings for the first precondition, ex. (((?L1 CITY-LOC-2 LOCATION)))
-          (pprint variabled-pre)
-          ;;if there are no possible-variable-bindings for the precondition return nil -> cannot be satisfied under any circumstances
-          (if (null variabled-pre) (return-from action-precondition-satisfier nil))
-          (loop for b in variabled-pre do   ;;for every possible parameter-binding
-            (pprint b)
-                    
-            (let* ((new-theta (append theta b))  ;;new-theta is the old theta with the new variable-binding in the same form, ex. ((?V TRUCK-0 VEHICLE)
-             (new-action (cons only-action new-theta))) ;; new-action is the action with the new theta
-          (cond
-          ;;if there are no other preconditions left push the new action to action-satisfied
-          ((null variabled-preconditions)      
-          (setq actions-satisfied (push new-action actions-satisfied)))
-          
-          
-          ;;otherwise if there are more preconditions with variables left, ex. (((ROAD ?L1 CITY-LOC-1) (1)))
-          (T
-           ;;for every possible variable-binding in variabled-pre bind it to every precondition still in variabled-preconditions and then
-           ;;recursively call action-precondition-satisfier with the action and variabled-preconditions
-           ;; -> list of still unsatisfiede preconditions that now contain new variables and must be analysed again
-           ;;(and(let ((preconditions (mapcar 'car variabled-preconditions))) ;; ex. ((ROAD ?L1 CITY-LOC-1))
-            ;;(loop for b in variabled-pre do             ;; ex. b= (((?L1 CITY-LOC-2 LOCATION)))
-             (let*((actions-satisfied-rec nil)
-              (substituted-preconditions nil)) 
-                (setq substituted-preconditions (precondition-substitute preconditions b)) ;; ex. ((ROAD CITY-LOC-2 CITY-LOC-1))
-             ;;recursively check if unsatisfied preconditions are now satisfied  
-              (setq actions-satisfied-rec (action-precondition-satisfier new-action substituted-preconditions)) ;;nil or a list of satisfied actions (action theta)
+        (cond
+          ;;if there are no unsatisfied preconditions, add the action to the list of satisfied actions and return it -> all preconditions satisfied, no additional steps needed
+          ((null unsatisfied-preconditions)
+           (setq actions-satisfied (cons action actions-satisfied))
+           (return-from action-precondition-satisfier actions-satisfied))
+          ;;otherwise if there are unsatisfied preconditions
+          ;;check if all preconditions in unsatisfied contain variables  -> returns nil otherwise
+          (T (setq variabled-preconditions (all-contain-variables unsatisfied-preconditions)) ;;ex. (((AT TRUCK-0 ?L1) (2)) ((ROAD ?L1 CITY-LOC-1) (1)))
+    ;;if variabled-preconditions is null, return nil immediately, because there is at least one precondition without variables that cannot be satisfied
+              (when (null variabled-preconditions)
+              (return-from action-precondition-satisfier nil))
+              (let* ((variabled-pre nil)                      ;;from the list of variable-preconditions ex. (((AT TRUCK-0 ?L1) (2)) ((ROAD ?L1 CITY-LOC-1) (1)))
+                (pre (first variabled-preconditions))   ;;take the first precondition to work with, ex.((AT TRUCK-0 ?L1) (2)) 
+                 (variabled-preconditions (mapcar 'car (rest variabled-preconditions)))) ;;take the rest of the preconditions for later, ex. (((ROAD ?L1 CITY-LOC-1) (1)))
+                (setq variabled-pre (get-variables pre))  ;;get all possible variable-bindings for the first precondition, ex. (((?L1 CITY-LOC-2 LOCATION)))
+                ;;if there are no possible-variable-bindings for the precondition return nil -> cannot be satisfied under any circumstances
+                (if (null variabled-pre) (return-from action-precondition-satisfier nil))
+                (loop for b in variabled-pre do   ;;for every possible parameter-binding
+                  (let* ((new-theta (append theta b))  ;;new-theta is the old theta with the new variable-binding in the same form, ex. ((?V TRUCK-0 VEHICLE)
+                     (new-action (list only-action new-theta))) ;; new-action is the action with the new theta
+                (cond
+                  ;;if there are no other preconditions left push the new action to action-satisfied
+                  ((null variabled-preconditions)      
+                    (setq actions-satisfied (append actions-satisfied new-action)))
+                  ;;otherwise if there are more preconditions with variables left, ex. (((ROAD ?L1 CITY-LOC-1) (1)))
+                  (T
+                   ;;for every possible variable-binding in variabled-pre bind it to every precondition still in variabled-preconditions and then
+                   ;;recursively call action-precondition-satisfier with the action and variabled-preconditions
+                   ;; -> list of still unsatisfiede preconditions that now contain new variables and must be analysed again
+                   ;;(and(let ((preconditions (mapcar 'car variabled-preconditions))) ;; ex. ((ROAD ?L1 CITY-LOC-1))
+                      ;;(loop for b in variabled-pre do             ;; ex. b= (((?L1 CITY-LOC-2 LOCATION)))
+                       (let*((actions-satisfied-rec nil)
+                          (substituted-preconditions nil)) 
+                          (setq substituted-preconditions (precondition-substitute preconditions b)) ;; ex. ((ROAD CITY-LOC-2 CITY-LOC-1))
+                         ;;recursively check if unsatisfied preconditions are now satisfied  
+                        (setq actions-satisfied-rec (action-precondition-satisfier new-action substituted-preconditions)) ;;nil or a list of satisfied actions (action theta)
                                              ;;if nil there was no way to satisfy the preconditions with this binding - do not add this to the actions-satisfied-rec- list
-              (unless (null actions-satisfied-rec)
-                (push actions-satisfied-rec actions-satisfied)))))))))) ;;if the branch was succesful, push its new actions with theta to the return list, otherwise ignore
-          (return-from action-precondition-satisfier actions-satisfied))) ;; might be nil if there was no branch that satisfied the preconditions
-
-  
-
+                        (unless (null actions-satisfied-rec)
+                          (setq actions-satisfied (append actions-satisfied actions-satisfied-rec))))))))
+                ))
+          ) ;;if the branch was succesful, push its new actions with theta to the return list, otherwise ignore
+                    (return-from action-precondition-satisfier actions-satisfied))) ;; might be nil if there was no branch that satisfied the precondition
 
 
 ;; Input: a list of preconditions ((AT TRUCK-0 ?L) (ROAD CITY-LOC-1 CITY-LOC-0)) or ((AT TRUCK-0 CITY-LOC-0) (ROAD CITY-LOC-1 CITY-LOC-0))
@@ -884,7 +906,6 @@ before generating any other subtasks in the task network
 (defun find-unsatisfied-preconditions (preconditions) 
     (let ((satisfied nil)
           (unsatisfied nil))
-          
      (dotimes (i (length preconditions))   ;;for all preconditions
           (let ((precondition (nth i preconditions)))
                (if (find T (mapcar #'(lambda(unit) (equal (rest precondition) unit)) (gethash (first precondition) *current-status*)))
@@ -925,6 +946,37 @@ before generating any other subtasks in the task network
 ;; Input: a pair of a precondition containing at least one variable and the position-list of its variable(s), ex. ((AT TRUCK-0 ?L) (2))or ((ROAD CITY-LOC-1 ?L) (2))
 ;; output: a list of possible variable-bindings or nil if no binding could be found , ex. (((?L CITY-LOC-2 LOCATION)))
 ;;         or (((?L CITY-LOC-0 LOCATION)) ((?L CITY-LOC-2 LOCATION))) if both possibilities for ?L would satisfy the precondition
+; (defun get-variables (precondition)
+;   (let* ((variables nil)    ;;a list of possible variable bindings
+;         (precond (car precondition)) ; (AT TRUCK-0 ?L)
+;         (head (car precond)) ; AT
+;         (parameters (rest precond)) ;(TRUCK-0 ?L)
+;         (pos (mapcar '1- (second precondition))) ;; the list of positions of variables, each reduced by one because the predicate is handled separately, (2) -> (1)
+;         (cur-state nil) ;; to be filled from the current-status
+;         (matches-state nil)) ;; to be filled with parameters from the current state that are the same as the  precondition-parameters except for variables
+;     (setq cur-state (gethash head *current-status*)) ;; get a list of parameters of the same predicate as the precondition from the current-status ; ((TRUCK-0 LOC-1))  
+  
+;     (loop for cur in cur-state do            ;;for every parameter-list of the same predicate as the precondition from the current-status
+;      (let((matches T))                       ;;Boolean to check if every parameter matches
+;       (dotimes (i (length parameters))            
+;                (let ((param (nth i parameters)))    ;;for every parameter of the precondition
+;                  (unless (find i pos)               ;;unless the position i is indicated in pos as a variable-position
+;        ;;when the parameter of the precondition and the parameter of the current-status parameterlist at the same position are not equal, set matches to nil -> parameters don't match
+;        (when (not (equal param (nth i cur))) (setq matches nil)))))
+;       (when matches                      ;;if matches is still T every parameter in cur was equal to every parameter in param at the same position except for variables, thus the parameters match
+;         (push cur matches-state))))
+    
+;     (when (null matches-state)
+;       (return-from get-variables nil))  ;; if no matching parameters were found, the precondition cannot be satsified regardless of variables -> return nil
+
+;     (loop for p in matches-state do     ;;for every matching parameter-list, ex. p = TRUCK-0 LOC-1
+;   (let ((p-variables))             ;;list of variable-bindings matching p
+;     (loop for i in pos do              ;;for every variable-position indicated in pos
+;        ;;push to p-variables the variable from the precondition params and the constant from p at the same position to p-variables, ex. (l? LOC-1)
+;     (push (type-variable-bindings (list (nth i parameters) (nth i p))) p-variables)) ;;ex. (?L LOC-1)
+;     ;; push the variables-binding for p to the variables list - this way, if there is more than one possible variable-binding all of them are collected in variables
+;     (push (reverse p-variables) variables)))
+;     (return-from get-variables variables)))
 (defun get-variables (precondition)
   (let* ((variables nil)    ;;a list of possible variable bindings
         (precond (car precondition)) ; (AT TRUCK-0 ?L)
@@ -934,27 +986,24 @@ before generating any other subtasks in the task network
         (cur-state nil) ;; to be filled from the current-status
         (matches-state nil)) ;; to be filled with parameters from the current state that are the same as the  precondition-parameters except for variables
     (setq cur-state (gethash head *current-status*)) ;; get a list of parameters of the same predicate as the precondition from the current-status ; ((TRUCK-0 LOC-1))  
-  
     (loop for cur in cur-state do            ;;for every parameter-list of the same predicate as the precondition from the current-status
      (let((matches T))                       ;;Boolean to check if every parameter matches
       (dotimes (i (length parameters))            
                (let ((param (nth i parameters)))    ;;for every parameter of the precondition
                  (unless (find i pos)               ;;unless the position i is indicated in pos as a variable-position
-       ;;when the parameter of the precondition and the parameter of the current-status parameterlist at the same position are not equal, set matches to nil -> parameters don't match
-       (when (not (equal param (nth i cur))) (setq matches nil)))))
+           ;;when the parameter of the precondition and the parameter of the current-status parameterlist at the same position are not equal, set matches to nil -> parameters don't match
+           (when (not (equal param (nth i cur))) (setq matches nil)))))
       (when matches                      ;;if matches is still T every parameter in cur was equal to every parameter in param at the same position except for variables, thus the parameters match
         (push cur matches-state))))
-    
     (when (null matches-state)
       (return-from get-variables nil))  ;; if no matching parameters were found, the precondition cannot be satsified regardless of variables -> return nil
-
     (loop for p in matches-state do     ;;for every matching parameter-list, ex. p = TRUCK-0 LOC-1
-  (let ((p-variables))             ;;list of variable-bindings matching p
-    (loop for i in pos do              ;;for every variable-position indicated in pos
-       ;;push to p-variables the variable from the precondition params and the constant from p at the same position to p-variables, ex. (l? LOC-1)
-    (push (type-variable-bindings (list (nth i parameters) (nth i p))) p-variables)) ;;ex. (?L LOC-1)
-    ;; push the variables-binding for p to the variables list - this way, if there is more than one possible variable-binding all of them are collected in variables
-    (push (reverse p-variables) variables)))
+    (let ((p-variables))             ;;list of variable-bindings matching p
+      (loop for i in pos do              ;;for every variable-position indicated in pos
+         ;;push to p-variables the variable from the precondition params and the constant from p at the same position to p-variables, ex. (l? LOC-1)
+      (push (type-variable-bindings (list (nth i parameters) (nth i p))) p-variables)) ;;ex. (?L LOC-1)
+      ;; push the variables-binding for p to the variables list - this way, if there is more than one possible variable-binding all of them are collected in variables
+      (push (reverse p-variables) variables)))
     (return-from get-variables variables)))
 
   ;; Input: a list of action-preconditions, ex. ((AT ?V ?L1) (ROAD ?L1 ?L2)), and a theta
