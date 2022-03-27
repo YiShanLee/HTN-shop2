@@ -69,7 +69,7 @@
  ;; third layer of shop2
  ;; unify action and update state from primitive task
 (defun update-primitive-task ()
- (let* ((Actions-lst (action-satisfier *actions* *current-task*)))
+ (let* ((Actions-lst (action-satisfier *actions*)))
         (format t "~%step of update-primitive-task -> Actions-lst: ~A" Actions-lst)
                     (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
                           (t (update-action-values (nth (random (length Actions-lst)) Actions-lst)))  
@@ -157,11 +157,14 @@
 (defun make-lexicon ()
   (let ((lexicon nil)
         (method-type nil))
-    (setq method-type (loop for m in *methods* collect
-              (hddl:hddl-method-parameters m)))
-    (setq method-type (delete-duplicates e1 :test #'eq :key 'car))
+    (mapcar #'(lambda(c)
+               (mapcar #'(lambda(d)
+                          (push d method-type))(hddl:hddl-method-parameters c))) 
+            *methods*)
+    (setq method-type (delete-duplicates method-type :test #'eq :key 'car))
     (setq lexicon (append method-type lexicon))
     (setq lexicon (append (hddl:hddl-problem-objects *problem*) lexicon))
+    
   lexicon))
 
 ;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case
@@ -269,7 +272,7 @@
 ;; leave out the satifying action list filtered by current-status
 (defun action-satisfier (actions)
   (let ((actions-satisfied nil)
-        (actions (action-unifier actions))) ;;{(a.theta)}
+        (actions (action-unifier actions))) ;;{(a.theta)};;funktioniert 
     (unless (null actions) 
      (dotimes (i (length actions))
           (let* ((action (nth i actions))
