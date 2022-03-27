@@ -117,7 +117,7 @@ The components of the  returned domain or problem can themselves contain other s
 	    temp-actions (separate-effects actions) ;; for actions first separate effects into positive and negative effects
 	    hddl-actions                            ;;then use that action-list with separated effects to build hddl-actions
 	    (loop for (x name y parameters z preconditions w neg-effects pos-effects) in temp-actions collect
-		      (make-hddl-action :name name :parameters (typing parameters) :preconditions (remove-if-not 'consp preconditions) :neg-effects  neg-effects :pos-effects pos-effects)))
+		      (make-hddl-action :name name :parameters (typing parameters) :preconditions (remove-and preconditions) :neg-effects  neg-effects :pos-effects pos-effects)))
 	    
       ;;Finally combine everything into a HDDL-domain, reversing the task-, method- and actions-lists
       ;;because the lines for those elements in the stream each start with the keyword and they are thus added to the lists in reverse through cons.
@@ -170,7 +170,7 @@ The components of the  returned domain or problem can themselves contain other s
 	  (constraints))
 
       (if (equal (string (car htn)) "TASKS")
-	  (setq tasks (remove-if-not 'consp (second htn)) ;;remove "AND" at the beginning of the task-list if there is one
+	  (setq tasks (remove-and (second htn)) ;;remove "AND" at the beginning of the task-list if there is one
 		htn (cddr htn)))
       
       (if (equal (string (car htn)) "ORDERING")
@@ -221,7 +221,13 @@ The components of the  returned domain or problem can themselves contain other s
 	  (push (make-hddl-method :name name :parameters (typing parameters) :task task :subtasks subtasks :ordered-subtasks ordered) newmethods));;make HDDL-method and push to new methodslist
     (reverse newmethods)))
 
-
+;;Input: a list
+;;Output: the same list with removed "AND" if there was one
+(defun remove-and (list)
+  (let ((newlst nil))
+  (if (equal (string (car list)) "AND")
+      (setq newlst (cdr list))
+      (setq newlst list))))
 
 ;;Constrains subtasks of a method with each other if the method has ordered subtasks in such a way
 ;;that every subtask is constrained by the subtask(s) before it, to ensure that they are fulfilled in the exact given order.
@@ -231,7 +237,7 @@ The components of the  returned domain or problem can themselves contain other s
   (let ((new-hddl-methods))
     
     (loop for method in hddl-methods do
-	(let ((subtasks  (remove-if-not 'consp(hddl-method-subtasks method))) ;;remove unnecessary "AND" from subtasks-list if present
+	(let ((subtasks  (remove-and (hddl-method-subtasks method))) ;;remove unnecessary "AND" from subtasks-list if present
 	      (new-subtasks)
 	      (ordered nil))
 	  
@@ -262,7 +268,7 @@ The components of the  returned domain or problem can themselves contain other s
 (defun separate-effects (actions)
   (loop for action in actions collect                            ;;for every action
 	(let* ((new-action (butlast action))                     ;;keep everything but the effects of an action intact
-	      (effect (remove-if-not 'consp (car (last action))));; make a list of all effects,remove "AND" at the beginning if present
+	      (effect (remove-and (car (last action))));; make a list of all effects,remove "AND" at the beginning if present
 	      (pos-effects)
 	      (neg-effects)) 
 	  
