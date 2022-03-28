@@ -51,9 +51,7 @@
       (setq *current-task* (car *T0*))
       (setq *current-task* (nth (random (length *T0*)) *T0*))
         )
-    (format t "~%-------------------------------------------------------------------~%
-              step-> shop2-plan: *current-task*: ~A~% *T0*: ~A
-              ~%-------------------------------------------------------------------~%" *current-task* *T0*)
+    (format t "~%-------------------------------------------------------------------~%step-> shop2-plan: *current-task*: ~A~% *T0*: ~A~%-------------------------------------------------------------------~%" *current-task* *T0*)
     ;;(setq *T0* (cdr *T0*))
     (setq *T0* (remove *current-task* *T0*)
           *analyzing-subtask* nil)
@@ -85,9 +83,7 @@
  ;; unify action and update state from primitive task
 (defun update-primitive-task ()
  (let* ((Actions-lst (action-satisfier)))
-        (format t "~%-------------------------------------------------------------------~%
-                  step of update-primitive-task -> Actions-lst: ~A
-                  ~%-------------------------------------------------------------------~%" Actions-lst)
+        (format t "~%-------------------------------------------------------------------~%step of update-primitive-task -> Actions-lst: ~A ~%-------------------------------------------------------------------~%" Actions-lst)
                     (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
                           (t (update-action-values (nth (random (length Actions-lst)) Actions-lst)))
                     )
@@ -102,17 +98,13 @@
          (setq *Tasks* (remove *current-task* *Tasks*)) 
          (modify-constraints)
          (constraint)
-         (format t "~%-------------------------------------------------------------------~%
-                   step-> update-action-values: *Plan*: ~A~% *T0*: ~A
-                   ~%-------------------------------------------------------------------~%" *Plan* *T0*)
+         (format t "~%-------------------------------------------------------------------~%step-> update-action-values: *Plan*: ~A~% *T0*: ~A~%-------------------------------------------------------------------~%" *Plan* *T0*)
  ) 
 )
 ;; unify methods and update state from nonprimitive task
 (defun update-nonprimitive-task ()
  (let* ((Methods-lst (method-satisfier))) ; {(m . theta)...}  
-     (format t "~%--------------------------------------------------------------
-               step-> update-nonprimitive-task -> Methods-lst: ~A
-               ~%---------------------------------------------------------------~%" (length Methods-lst))
+     (format t "~%--------------------------------------------------------------~%step-> update-nonprimitive-task -> Methods-lst: ~A~%---------------------------------------------------------------~%" (length Methods-lst))
      (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
             (t  (update-nonprimitive-values (nth (random (length Methods-lst)) Methods-lst)))) ; nondeterministically choose a pair (m, θ) ∈ M (random choose)
  ) 
@@ -128,14 +120,10 @@
    (setq *Tasks* (remove *current-task* *T0*) ; modify T by removing t, (removin in constraint-lists happens later through constraining with subtasks!
           subm (copy-seq (hddl:hddl-method-subtasks (car method)))
           theta (cadr method)); in sub(m) to precede the tasks that t precede
-    (format t "~%-----------------------------------------------------
-              update-nonprimitive-values->theta: ~A~% Gewaehlte methode: ~A
-              ~%-------------------------------------------------------~%" theta method)
+    (format t "~%-----------------------------------------------------update-nonprimitive-values->theta: ~A~% Gewaehlte methode: ~A~%-------------------------------------------------------~%" theta method)
     (setq subm (update-tasks subm theta) 
           *Tasks* (modify-constraints subm)) ;;constrain tasks with subtasks where appropriate
-     (format t "~%-----------------------------------------------------
-               update-nonprimitive-values-> *Tasks*: ~A~% subtasks: ~A~% Gewaehlte methode: ~A
-               ~%-------------------------------------------------------~%" *Tasks* subm method)
+     (format t "~%-----------------------------------------------------update-nonprimitive-values-> *Tasks*: ~A~% subtasks: ~A~% Gewaehlte methode: ~A~%-------------------------------------------------------~%" *Tasks* subm method)
      (setq *Tasks* (append subm *Tasks*))  ;;adding sub(m) -> use append because push adds subtasks as list!
    ; (if (not (null subm)) (setq *T0* (constraint subm))
       (if (not (null subm)) (setq *analyzing-subtask* T))
@@ -209,6 +197,9 @@
   )
 ;; add-state
 (defun add-state (pos-effects) 
+ (declare (optimize debug))
+ (pprint pos-effects)
+  ; (unless (listp (first action-preconditions))
   (dotimes (i (length pos-effects))
     (setq effect (nth i pos-effects))
     (if (gethash (first effect) *current-status*)
@@ -354,9 +345,7 @@
           (setq actions-satisfied (push (list action (parameters-binding action)) actions-satisfied))
           ) 
       ) (return-from action-unifier actions-satisfied) ;;{(a.theta)}
-    (format t "~%-------------------------------------------------------------------~%
-              step-> action-unifier: current unified actions list: ~A
-              ~%-------------------------------------------------------------------~%" actions-satisfied)
+    (format t "~%-------------------------------------------------------------------~%step-> action-unifier: current unified actions list: ~A~%-------------------------------------------------------------------~%" actions-satisfied)
     )
   )
 #| ((#S(READ-HDDL-PACKAGE::HDDL-ACTION
@@ -386,7 +375,7 @@
         (setq variabled-action (action-precondition-satisfier action preconditions))   ;;ex. (action theta)((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
             (unless (null variabled-action)                                 ;;unless the list is emtpy -> there is no possibility for the action-preconditions to be fulfilled
           (setq actions-satisfied (append variabled-action actions-satisfied))))))   ;;add the variabled-actions to the list of actions-satisfied
-    (format t "~%step-> action-satisfier: current satisfied actions list: ~A" actions-satisfied)
+    (format t "~%----------------------------------------------~%step-> action-satisfier: current satisfied actions list: ~A~%----------------------------------------------~%" actions-satisfied)
 (return-from action-satisfier actions-satisfied)))
  #|  (((#S(READ-HDDL-PACKAGE::HDDL-ACTION
       :NAME DRIVE
@@ -417,9 +406,7 @@
       (setq method (nth i *methods*))
       (if (operator-unifier-p method) (setq methods-satisfied (push (list method (parameters-binding method)) methods-satisfied)))
     ) (and (return-from method-satisfier (values methods-satisfied))
-          (format t "~%-------------------------------------------------------------------~%
-                    step-> method-satisfier: current satisfied methods list: ~A
-                    ~%-------------------------------------------------------------------~%" (length methods-satisfied)))
+          (format t "~%-------------------------------------------------------------------~%step-> method-satisfier: current satisfied methods list: ~A~%-------------------------------------------------------------------~%" (length methods-satisfied)))
   )
 )
 
