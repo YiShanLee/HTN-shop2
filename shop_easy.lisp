@@ -4,14 +4,15 @@
   (shop2-plan)
   )
 (defun read-input (&optional (domain-path "domain.hddl") (problem-path "problem.hddl"))
-; (defun read-input ()
-(unless domain-path (setq domain-path "domain.hddl" "problem.hddl"))
+(unless domain-path (setq domain-path "domain.hddl"
+                          problem-path "problem.hddl"))
   (princ "Enter domain file")
   (setq domain-path (string(read)))
   (princ "Enter problem file")
   (setq problem-path (string(read)))
   (fetch-initial-state domain-path problem-path)
   )
+
 ;; global variables from domain knowledge and problem.hddl
 (defun fetch-initial-state (domain-file problem-file)
   (defparameter *domain* (hddl:read-hddl-domain domain-file))
@@ -176,18 +177,7 @@
   (setf (hddl:hddl-task-constraints task) newconstraints))))
   tasks)
 
-; constraint T to T0 
-;; hier muss also für alle t in T prüfen, dass nicht eine andere task vorher ausgeführt werden muss
-;; prüft, ob die constraints leer sind oder nicht
-;; bei den Methoden, dass die constraints bei den Subtasks eingefügt werden müssen
-; (defun constraint (tasks)
-;    (setq *T0* nil)
-;    (setq tasks (delete-duplicates tasks))
-;   (dotimes (curr-num (length tasks))
-;      (if (null (hddl-task-constraints (nth curr-num tasks))) (setq *T0* (cons (nth curr-num tasks) *T0*)) nil))
-;   (format t "~%step-> constraint: constraint list of tasks-> *T0*: ~A" *T0*)
-;   (return-from constraint *T0*)
-; )
+
 
 
 ;;builds T0: checks for all tasks if constraint-slot is empty and adds it to T0 if that's the case; if no tasklist is provided, the global tasklist is used as default value
@@ -230,18 +220,24 @@
 (defun add-state (pos-effects) 
   (dotimes (i (length pos-effects))
     (setq effect (nth i pos-effects))
-    (if (null (gethash (first effect) *current-status*))
-        (setf (gethash (first effect)) (rest effect))
-        (let ((value1 (gethash (first effect) *current-status*)))
-              (setf (gethash (first effect) *current-status*) (cons (rest effect) value1)))))
+    (if (gethash (first effect) *current-status*)
+        (let ((value1 (gethash (first effect) *current-status*))
+              (new-value nil))
+        (setf (gethash (first effect) *current-status*) (union (list (rest effect)) value1)))
+        ; else 
+        (and (remf (first effect) *current-status*)
+             (setf (gethash (first effect)) (rest effect)))
+        ))
   )
 ;; delete-state
 (defun delete-state (neg-effects) ; (AT ?V ?L2)
   (dotimes (i (length neg-effects))
     (setq operator (nth i neg-effects))
     (if (gethash (first operator) *current-status*)
-        (let((value1 (gethash (first operator) *current-status*)))
-            (setf (gethash (first operator) *current-status*) (remove (rest operator) value1))
+        (let ((hash-value (gethash (first operator) *current-status*))
+              (new-value nil))
+            (setq new-value (delete-if 'null (mapcar #'(lambda(c)(if(not(equal c (rest operator))) c)) hash-value)))
+            (setf (gethash (first operator) *current-status*) new-value)
           )
         ))
 )
@@ -256,9 +252,11 @@
        (add-state (effect-substitute pos-effects theta)))
   )
 ) 
- 
-;---------------------------------------------------------------------------
-
+;-----------------------------------------------
+(defun print-hash-entry (key value)
+    (format t "key ~S: ~S~%" key value))
+(defun tables ()
+  (maphash #'print-hash-entry *current-status*))
 ;------------------------------------------------
 ;; 
 (defun make-lexicon ()
@@ -393,8 +391,6 @@
          (variabled-action nil))
         (setq preconditions (precondition-substitute action-preconditions action-theta)) ;;ex. ((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
         (format t "~%step-> action-satisfier: preconditions : ~A" preconditions)
-            ;; returns a list of actions that can be appended to the action-list, consisting of the input-action with all possible variable-bindings in theta that
-        ;;satisfy the preconditions of the action, of the form ((action theta1).. (action thetaN)
         (setq variabled-action (action-precondition-satisfier action preconditions))   ;;ex. (action theta)((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
         (format t "~%step-> action-satisfier: variabled-action  : ~A" variabled-action)
             (unless (null variabled-action)                                 ;;unless the list is emtpy -> there is no possibility for the action-preconditions to be fulfilled
