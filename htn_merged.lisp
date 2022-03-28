@@ -132,7 +132,7 @@ following commentary.
 )
 
 (defun update-nonprimitive-values (method)
-   (setq *Tasks* (cdr *Tasks*) ; modify T by removing t, (removin in constraint-lists happens later through constraining with subtasks!
+   (setq *Tasks*  (remove *current-task* *Tasks*) ; modify T by removing t, (removin in constraint-lists happens later through constraining with subtasks!
           subm (copy-seq (hddl:hddl-method-subtasks (car method)))
           theta (cadr method)); in sub(m) to precede the tasks that t precede
     (format t "~%update-nonprimitive-values->theta: ~A~% gewaehlte methode: ~A" theta method)
