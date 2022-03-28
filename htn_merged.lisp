@@ -8,6 +8,7 @@ following commentary.
 
 ;; main operator of shop2 reads input files and starts the SHOP2-Planner
 (defun main-operator ()
+  "Reads input file and starts the Shop2-Planner"
   (read-input)
   (shop2-plan)
   )
@@ -19,6 +20,8 @@ following commentary.
 ;;and calls fetch-initial-state with the filepaths to read all relevant information from the files
 ;;Input: optional domain- and problem-filepath 
 (defun read-input (&optional (domain-path "domain.hddl") (problem-path "problem.hddl"))
+  (unless domain-path (setq domain-path "domain.hddl"
+                          problem-path "problem.hddl"))
   (princ "Enter domain filepath")
   (setq domain-path (string(read)))
   (princ "Enter problem filepath")
@@ -56,6 +59,7 @@ following commentary.
 			objects from the problem and their types, ex. ((?V VEHICLE) (CITY-LOC-0 LOCATION))
 |#
 (defun fetch-initial-state (domain-path problem-path)
+  "Gets the initial state of global variables"
   (defparameter *domain* (hddl:read-hddl-domain domain-path))
   (defparameter *problem* (hddl:read-hddl-problem problem-path))
   (defparameter *T0* '())
@@ -132,7 +136,7 @@ following commentary.
           subm (copy-seq (hddl:hddl-method-subtasks (car method)))
           theta (cadr method)); in sub(m) to precede the tasks that t precede
     (format t "~%update-nonprimitive-values->theta: ~A~% gewaehlte methode: ~A" theta method)
-    (setq  subm (update-tasks subm theta) 
+    (setq subm (update-tasks subm theta) 
           *Tasks* (modify-constraints subm)) ;;constrain tasks with subtasks where appropriate
      (format t "~%update-nonprimitive-values-> *Tasks*: ~A~% subtasks: ~A~% gewaehlte methode: ~A" *Tasks* subm method)
      (setq *Tasks* (append subm *Tasks*))  ;;adding sub(m) -> use append because push adds subtasks as list!
@@ -446,22 +450,28 @@ following commentary.
 (defun add-state (pos-effects) 
   (dotimes (i (length pos-effects))
     (setq effect (nth i pos-effects))
-    (if (null (gethash (first effect) *current-status*))
-        (setf (gethash (first effect)) (rest effect))
-        (let ((value1 (gethash (first effect) *current-status*)))
-              (setf (gethash (first effect) *current-status*) (cons (rest effect) value1)))))
+    (if (gethash (first effect) *current-status*)
+        (let ((value1 (gethash (first effect) *current-status*))
+              (new-value nil))
+        (setf (gethash (first effect) *current-status*) (union (list (rest effect)) value1)))
+        ; else 
+        (and (remf (first effect) *current-status*)
+             (setf (gethash (first effect)) (rest effect)))
+        ))
   )
+
 ;; delete-state
 (defun delete-state (neg-effects) ; (AT ?V ?L2)
   (dotimes (i (length neg-effects))
     (setq operator (nth i neg-effects))
     (if (gethash (first operator) *current-status*)
-        (let((value1 (gethash (first operator) *current-status*)))
-            (setf (gethash (first operator) *current-status*) (remove (rest operator) value1))
+        (let ((hash-value (gethash (first operator) *current-status*))
+              (new-value nil))
+            (setq new-value (delete-if 'null (mapcar #'(lambda(c)(if(not(equal c (rest operator))) c)) hash-value)))
+            (setf (gethash (first operator) *current-status*) new-value)
           )
         ))
 )
- 
  
 ;-----------------------------------------------------------------------------
 ;;Helper-Functions for third layer of SHOP2-Planner shared by primitive and
@@ -706,7 +716,7 @@ following commentary.
 ;;; operator-unifier-p
 ;; input: task & operator (as action or method)
 ;; output: True/ False
-;; check name of tasks from action and current-task the same :: todo
+;; checks name of tasks from action and current-task the same :: todo
 ;;       each parameter identical from operator (as action or method) and task 
 ;; pass to next function as action-satisfier or method-satisfier 
 (defun operator-unifier-p (operator)
@@ -785,3 +795,11 @@ following commentary.
   (if *Plan*
   (format t "Shop2-operator finds the following current possible plan:~% ~A" *Plan*)
   (format t "Shop2-operator cannot find a plan for this problem.~% Please check that your HDDL problem file is solvable with your domain file.")))
+
+
+;--------------------------------------
+;;Prints the current-status from hash-table
+(defun print-hash-entry (key value)
+    (format t "key ~S: ~S~%" key value))
+(defun tables ()
+  (maphash #'print-hash-entry *current-status*))
