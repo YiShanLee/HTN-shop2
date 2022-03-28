@@ -16,7 +16,7 @@ The components of the  returned domain or problem can themselves contain other s
 	   hddl-action-preconditions hddl-action-neg-effects hddl-action-pos-effects
 	   make-hddl-domain hddl-domain-name hddl-domain-requirements  hddl-domain-types
 	   hddl-domain-predicates hddl-domain-tasks hddl-domain-methods hddl-domain-actions
-	   make-hddl-task hddl-task-name hddl-task-parameters hddl-task-constraints
+	   make-hddl-task hddl-task-name hddl-task-parameters hddl-task-constraints copy-hddl-task 
 	   make-hddl-problem hddl-problem-name hddl-problem-domain  hddl-problem-objects
 	   hddl-problem-tasks hddl-problem-ordering hddl-problem-constraints
 	   hddl-problem-init-status))
