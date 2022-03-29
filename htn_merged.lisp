@@ -89,7 +89,7 @@ following commentary.
       (if *analyzing-Subtasks*
 	  (setq *current-task* (car *T0*))
 	  (setq *current-task* (nth (random (length *T0*)) *T0*)))
-      (format t "~%----------------------------------------------~%step-> shop2-plan: *T0*: ~A~% *current-task*: ~A ~%----------------------------------------------~%" *T0* *current-task*)
+      (format t "~%----------------------------------------------~%shop2-plan->~% *T0*: ~A~% *current-task*: ~A ~%----------------------------------------------~%" *T0* *current-task*)
       (setq *analyzing-Subtasks* nil
 	    *T0* (remove *current-task* *T0*))
       (resolve-task))
@@ -111,7 +111,7 @@ following commentary.
 (defun update-primitive-task ()
   "Searches for a list of applicable actions through prarameters binding and updates the primitive task"
  (let* ((Actions-lst (action-satisfier)))
-        (format t "~%----------------------------------------------~%step of update-primitive-task -> Actions-lst: ~A~%----------------------------------------------~%" Actions-lst)
+        (format t "~%----------------------------------------------~%update-primitive-task->~% Actions-lst: ~A~%----------------------------------------------~%" Actions-lst)
           (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
                 (t (update-action-values (nth (random (length Actions-lst)) Actions-lst)))
           )
@@ -127,7 +127,7 @@ following commentary.
          (setq *Tasks* (remove *current-task* *Tasks*)) 
          (modify-constraints)
          (constraint)
-         (format t "~%----------------------------------------------~%step-> update-action-values: *Plan*: ~A~% *T0*: ~A~%----------------------------------------------~%" *Plan* *T0*)
+         (format t "~%----------------------------------------------~%update-action-values->~% *Plan*: ~A~% *T0*: ~A~%----------------------------------------------~%" *Plan* *T0*)
  ) 
 )
 
@@ -135,7 +135,7 @@ following commentary.
 (defun update-nonprimitive-task ()
   "Searches for a list of applicable methods through parameters binding and updates the non-primitive task"
  (let* ((Methods-lst (method-satisfier))) ; {(m . theta)...}  
-     (format t "~%----------------------------------------------~%step-> update-nonprimitive-task -> Methods-lst: ~A~%----------------------------------------------~%" (length Methods-lst))
+     (format t "~%----------------------------------------------~%update-nonprimitive-task->~% Methods-lst: ~A~%----------------------------------------------~%" (length Methods-lst))
      (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
             (t  (update-nonprimitive-values (nth (random (length Methods-lst)) Methods-lst)))) ; nondeterministically choose a pair (m, θ) ∈ M (random choose)
  ) 
@@ -149,7 +149,7 @@ following commentary.
            subm (substitute-tasks-list subm theta) 
           *Tasks* (modify-constraints subm) ;;constrain tasks with subtasks where appropriate
           *Tasks* (append subm *Tasks*))  ;;adding sub(m) -> use append because push adds subtasks as list!
-(format t "~%----------------------------------------------~%update-nonprimitive-values-> Chosen method: ~A~% Subtasks: ~A~% New-tasks: ~A~%----------------------------------------------~%" method subm *Tasks*)
+(format t "~%----------------------------------------------~%update-nonprimitive-values->~% Chosen method: ~A~% Subtasks: ~A~% New-tasks: ~A~%----------------------------------------------~%" method subm *Tasks*)
 ;; (if (not (null subm)) (setq *T0* (constraint subm)))
 (if (not (null subm)) (setq *analyzing-Subtasks* T))
 (setq *T0* (constraint)))
@@ -246,7 +246,7 @@ following commentary.
         (setq variabled-action (action-precondition-satisfier action preconditions))   ;;ex. (action theta)((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
             (unless (null variabled-action)                                 ;;unless the list is emtpy -> there is no possibility for the action-preconditions to be fulfilled
           (setq actions-satisfied (append variabled-action actions-satisfied))))))   ;;add the variabled-actions to the list of actions-satisfied
-    (format t "~%----------------------------------------------~%step-> action-satisfier: current satisfied actions list: ~A~%----------------------------------------------~%" actions-satisfied)
+    (format t "~%----------------------------------------------~%action-satisfier->~% current satisfied actions list: ~A~%----------------------------------------------~%" actions-satisfied)
 (return-from action-satisfier actions-satisfied)))
  #|  (((#S(READ-HDDL-PACKAGE::HDDL-ACTION
       :NAME DRIVE
@@ -275,7 +275,7 @@ following commentary.
           (setq actions-satisfied (push (list action (parameters-binding action)) actions-satisfied))
           ) 
       ) (return-from action-unifier actions-satisfied) ;;{(a.theta)}
-    (format t "~%----------------------------------------------~%step-> action-unifier: current unified actions list: ~A~%----------------------------------------------~%" actions-satisfied)
+    (format t "~%----------------------------------------------~%action-unifier->~% current unified actions list: ~%~A~%----------------------------------------------~%" actions-satisfied)
     )
   )
 #| ((#S(READ-HDDL-PACKAGE::HDDL-ACTION
@@ -365,7 +365,7 @@ following commentary.
       (if (operator-unifier-p method)
 	  (setq methods-satisfied (push (list method (parameters-binding method)) methods-satisfied))))
     (and (return-from method-satisfier (values methods-satisfied))
-          (format t "~%----------------------------------------------~%step-> method-satisfier: current satisfied methods list: ~A~%----------------------------------------------~%" (length methods-satisfied)))))
+          (format t "~%----------------------------------------------~%method-satisfier->~% current satisfied methods list: ~%~A~%----------------------------------------------~%" (length methods-satisfied)))))
  
  ;-------------------
  ;; Helper functions for unifications of operators and tasks and building of theta 
