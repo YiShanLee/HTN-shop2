@@ -1,10 +1,12 @@
 #|
-Contains only finished and tested functions and methods
 The functions in this file utilize helper-functions and structures from the 
 :read-hddl-package, called HDDL-structures (ex. HDDL-action-structures) in the 
 following commentary.
 (nicknames :hddl and :read-hddl).
 |#
+;;(defparameter *file* (probe-file "read_hddl.lisp"))
+;;(eval-when (:compile-toplevel :load-toplevel :execute)
+;;  (load *file*))
 
 ;; main operator of shop2 reads input files and starts the SHOP2-Planner
 (defun main-operator ()
@@ -57,6 +59,7 @@ following commentary.
 				   gets changed during the planning process according to the effects of executed actions
 *lexicon* = a list of pairs of variables from the domain and their types as well as
 			objects from the problem and their types, ex. ((?V VEHICLE) (CITY-LOC-0 LOCATION))
+*analyzing-Subtasks* = a Boolean that is initialized as nil; it is set to T only after decomposition of a method to subtasks to indicate that in the next step the subtasks should be analyzed as opposed to all general tasks
 |#
 (defun fetch-initial-state (domain-path problem-path)
   "Gets the initial state of global variables"
@@ -69,7 +72,8 @@ following commentary.
   (defparameter *Tasks* (hddl:hddl-problem-tasks *problem*))
   (defparameter *current-task* nil)
   (defparameter *current-status* nil)
-  (defparameter *lexicon* (make-lexicon))  
+  (defparameter *lexicon* (make-lexicon))
+  (defparameter *analyzing-Subtasks* nil) 
   (get-current-status)
 )
   
@@ -79,15 +83,17 @@ following commentary.
 ;; if there are no more tasks left, return the *Plan*.
 (defun shop2-plan (&optional plan tasks state)
   (setq *T0* (constraint))
-  (loop while *T0* do
-    (setq *current-task* (nth (random (length *T0*)) *T0*))
-    (format t "~%----------------------------------------------~%step-> shop2-plan: *T0*: ~A~% *current-task*: ~A ~%----------------------------------------------~%" *T0* *current-task*)
-    (setq *T0* (remove *current-task* *T0*))
-    (resolve-task)
-  )     
-  (if (null *Tasks*) 
-  (return-from shop2-plan (planner-output)))
-  ) 
+    (loop while *T0* do
+  ;;if analyzing subtasks is T take the first task in *T0* as current-task, guaranteeing that the next task will be a subtask, because the subtasks are appended at the beginning of *Tasks*
+      (if *analyzing-Subtasks*
+	  (setq *current-task* (car *T0*))
+	  (setq *current-task* (nth (random (length *T0*)) *T0*)))
+      (format t "~%----------------------------------------------~%step-> shop2-plan: *T0*: ~A~% *current-task*: ~A ~%----------------------------------------------~%" *T0* *current-task*)
+      (setq *analyzing-Subtasks* nil
+	    *T0* (remove *current-task* *T0*))
+      (resolve-task))
+   (if (null *Tasks*)
+     (return-from shop2-plan (planner-output)))) 
 
 ;; second layer of shop2 
 ;; check if the *current-task* is a primitive or compound-task and continue accordingly
@@ -132,14 +138,15 @@ following commentary.
 
 (defun update-nonprimitive-values (method)
    (setq *Tasks* (remove *current-task* *Tasks*) ; modify T by removing t, (removin in constraint-lists happens later through constraining with subtasks!
-          subm (mapcar #'hddl:copy-hddl-task (hddl:hddl-method-subtasks (car method)))          
+          subm (mapcar #'hddl:copy-hddl-task (hddl:hddl-method-subtasks (car method)))         
           theta (cadr method)); in sub(m) to precede the tasks that t precede
     (setq subm (substitute-tasks-list subm theta) 
           *Tasks* (modify-constraints subm)) ;;constrain tasks with subtasks where appropriate
      (setq *Tasks* (append subm *Tasks*))  ;;adding sub(m) -> use append because push adds subtasks as list!
-     (format t "~%----------------------------------------------~%update-nonprimitive-values-> Chosen method: ~A~% Subtasks: ~A~% New-tasks: ~A~%----------------------------------------------~%" method subm *Tasks*)
-        (if (not (null subm)) (setq *T0* (constraint subm)))
-         (setq *T0* (constraint)))
+(format t "~%----------------------------------------------~%update-nonprimitive-values-> Chosen method: ~A~% Subtasks: ~A~% New-tasks: ~A~%----------------------------------------------~%" method subm *Tasks*)
+;; (if (not (null subm)) (setq *T0* (constraint subm)))
+(if (not (null subm)) (setq *analyzing-Subtasks* T))
+(setq *T0* (constraint)))
 
  ;--------------------------------------
 ;;Helper-Function for reading of files and defining and initializing of global parameters:
@@ -341,16 +348,13 @@ following commentary.
 ;; method-satisfier
 ;; pre(m) to be seen as deprecated tuple
 ;; output: {(method . theta)...}
-;--- todo parameters binding not in this block?
 (defun method-satisfier ()
   (let ((methods-satisfied nil))
-    (dotimes (i (length *methods*))
-      (setq method (nth i *methods*))
-      (if (operator-unifier-p method) (setq methods-satisfied (push (list method (parameters-binding method)) methods-satisfied)))
-    ) (and (return-from method-satisfier (values methods-satisfied))
-          (format t "~%----------------------------------------------~%step-> method-satisfier: current satisfied methods list: ~A~%----------------------------------------------~%" (length methods-satisfied)))
-  )
-)
+    (loop for method in *methods* do 
+      (if (operator-unifier-p method)
+	  (setq methods-satisfied (push (list method (parameters-binding method)) methods-satisfied))))
+    (and (return-from method-satisfier (values methods-satisfied))
+          (format t "~%----------------------------------------------~%step-> method-satisfier: current satisfied methods list: ~A~%----------------------------------------------~%" (length methods-satisfied)))))
  
  ;-------------------
  ;; Helper functions for unifications of operators and tasks and building of theta 
@@ -360,20 +364,31 @@ following commentary.
 ;; output: ((?V TRUCK-0 VEHICLE)) (?L2 CITY-LOC-0 LOCATION)) as theta
 ;; pass to action-satisfier or method-satisfier
 (defun parameters-binding (operator)
-  (let* ((op-params (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION) (hddl:hddl-action-parameters operator) 
-                      (hddl:hddl-method-parameters operator))) ; ((?V VEHICLE) (?L1 LOCATION) (?L2 LOCATION))
-        (task-params (hddl:hddl-task-parameters *current-task*)) ;(TRUCK-0 CITY-LOC-0) or (TRUCK-0 CITY-LOC-0 ?L2)
-        (op-variables (mapcar 'car op-params))
-        (binding-list nil)
-        (variable-position-list (mapcar #'(lambda(c)(search "?" c)) (mapcar 'symbol-name task-params))))
-    
-    (dotimes (i (length task-params))
-      (if (not (equal 0 (nth i variable-position-list)))
-          (push (list (first (nth i op-params)) (nth i task-params) (second (nth i op-params))) binding-list)
-          ))
-  
-  (reverse binding-list))
-)
+  (let* ((task-params (hddl:hddl-task-parameters *current-task*))
+         (variable-position-list (mapcar #'(lambda(c)(search "?" c)) (mapcar 'symbol-name task-params)))
+	(binding-list nil))
+  (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION)
+      (setq binding-list (reverse (action-parameters-binding operator task-params variable-position-list)))
+      (setq binding-list (reverse (method-parameters-binding operator task-params variable-position-list))))
+  binding-list))
+						      
+
+(defun method-parameters-binding (operator task-params variable-position-list)
+   (let ((op-variables (rest (hddl:hddl-method-task operator))) ;(?V ?L2)
+       (binding-list nil))
+   (dotimes (i (length task-params))
+     (if (not (equal 0 (nth i variable-position-list)))
+	 (push (type-variable-bindings (list (nth i op-variables) (nth i task-params))) binding-list)))
+  binding-list))
+
+(defun action-parameters-binding (operator task-params variable-position-list)
+  (let* ((op-params (hddl:hddl-action-parameters operator))
+	 ;;(op-variables (mapcar 'car op-params))
+	 (binding-list nil))					       
+      (dotimes (i (length task-params))
+	    (if (not (equal 0 (nth i variable-position-list)))
+		(push (list (first (nth i op-params)) (nth i task-params)(second (nth i op-params))) binding-list)))
+    binding-list))
 
 ;;; operator-unifier-p
 ;; input: task & operator (as action or method)
