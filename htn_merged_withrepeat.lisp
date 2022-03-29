@@ -9,12 +9,35 @@ following commentary.
 ;;  (load *file*))
 
 ;; main operator of shop2 reads input files and starts the SHOP2-Planner
+; (defun main-operator ()
+;   "Reads input file and starts the Shop2-Planner"
+;   (read-input)
+;   (shop2-plan)
+;   )
 (defun main-operator ()
   "Reads input file and starts the Shop2-Planner"
-  (read-input)
-  (shop2-plan)
-  )
-
+  (let ((domain-path nil)
+        (problem-path nil)
+        (int nil)
+        (setofplan nil))
+   (princ "Enter domain filepath")
+    (setq domain-path (string(read)))
+    (princ "Enter problem filepath")
+    (setq problem-path (string(read)))
+    (princ "Please enter required run times for shop2 as string.")
+    (setq int (string(read)))
+    
+    (loop repeat (parse-integer int) do
+          
+      (fetch-initial-state domain-path problem-path)
+      
+      (setq setofplan (union (shop2-plan) setofplan)))
+    
+    (loop for p in setofplan do
+          (planner-output p)
+          )
+    
+  ))
 ;-----------------------------------------------------------
 ;;Functions for reading of files and defining and initializing of global parameters
 
@@ -94,7 +117,10 @@ following commentary.
 	    *T0* (remove *current-task* *T0*))
       (resolve-task))
    (if (null *Tasks*)
-     (return-from shop2-plan (planner-output)))) 
+       (progn 
+            (planner-output *Plan*)
+            (return-from shop2-plan *Plan*))) 
+   )
 
 ;; second layer of shop2 
 ;; check if the *current-task* is a primitive or compound-task and continue accordingly
@@ -244,10 +270,10 @@ following commentary.
             ;; returns a list of actions that can be appended to the action-list, consisting of the input-action with all possible variable-bindings in theta that
         ;;satisfy the preconditions of the action, of the form ((action theta1).. (action thetaN)
         (setq variabled-action (action-precondition-satisfier action preconditions))   ;;ex. (action theta)((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
-            (unless (null variabled-action)   
-                (if (eq (type-of (first variabled-action)) 'READ-HDDL-PACKAGE::HDDL-ACTION)
+            (unless (null variabled-action)  
+              (if (eq (type-of (first variabled-action)) 'READ-HDDL-PACKAGE::HDDL-ACTION)
                   (setq variabled-action (list variabled-action))
-                  )                                ;;unless the list is emtpy -> there is no possibility for the action-preconditions to be fulfilled
+                  )                               ;;unless the list is emtpy -> there is no possibility for the action-preconditions to be fulfilled
           (setq actions-satisfied (append variabled-action actions-satisfied))))))   ;;add the variabled-actions to the list of actions-satisfied
     (format t "~%----------------------------------------------~%action-satisfier->~% current satisfied actions list: ~A~%----------------------------------------------~%" actions-satisfied)
 (return-from action-satisfier actions-satisfied)))
@@ -708,10 +734,11 @@ following commentary.
 )
 ;--------------------------------------
 ;; Helper functions for output
-(defun planner-output ()
+(defun planner-output (i)
   "Checks if plan exists and prints the result of plan"
-  (if *Plan*
-  (format t "Shop2-operator finds the following current possible plan:~% ~A" *Plan*)
+  ; (if *Plan*
+  (if i
+  (format t "Shop2-operator finds the following current possible plan:~% ~A" i)
   (format t "Shop2-operator cannot find a plan for this problem.~% Please check that your HDDL problem file is solvable with your domain file.")))
 
 ;;Prints the current-status from hash-table
