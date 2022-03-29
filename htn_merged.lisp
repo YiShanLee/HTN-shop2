@@ -123,7 +123,7 @@ following commentary.
  (let* ((act (action-substitute action)) ; (NOOP TRUCK-0 CITY-LOC-2)
         )
          (modify-status action) ;; add pos-effect & delete neg-effect for current-status
-         (setq *Plan* (append *Plan* act)) ;; frage ?? 
+         (setq *Plan* (append *Plan* (list act))) ;; frage ?? 
          (setq *Tasks* (remove *current-task* *Tasks*)) 
          (modify-constraints)
          (constraint)
@@ -235,12 +235,11 @@ following commentary.
   (let ((actions-satisfied nil)
         (actions (action-unifier))) ;;{(a.theta)}
     (unless (null actions) 
-     (dotimes (i (length actions))
-          (let* ((action (nth i actions))
-                (action-preconditions (hddl:hddl-action-preconditions (first action))) ;((AT ?V ?L1) (ROAD ?L1 ?L2))
+     (loop for action in actions do
+          (let* ((action-preconditions (hddl:hddl-action-preconditions (first action))) ;((AT ?V ?L1) (ROAD ?L1 ?L2))
                 (action-theta (second action)) ; ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-0 LOCATION))  
                 (preconditions nil)
-         (variabled-action nil))
+                (variabled-action nil))
         (setq preconditions (precondition-substitute action-preconditions action-theta)) ;;ex. ((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-0))
             ;; returns a list of actions that can be appended to the action-list, consisting of the input-action with all possible variable-bindings in theta that
         ;;satisfy the preconditions of the action, of the form ((action theta1).. (action thetaN)
@@ -271,8 +270,7 @@ following commentary.
 (defun action-unifier ()
   "Seeks applicable actions list through verification actions with parameters parsing"
   (let ((actions-satisfied nil))
-    (dotimes (i (length *actions*))
-      (setq action (nth i *actions*))
+    (loop for action in *actions* do
       (if (operator-unifier-p action) 
           (setq actions-satisfied (push (list action (parameters-binding action)) actions-satisfied))
           ) 
@@ -482,10 +480,10 @@ following commentary.
   "Acquires current status as hash table from problem file"
  (let ((problem-types (hddl:hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
       (current-status (hddl:hddl-problem-init-status *problem*)) #|((ROAD CITY-LOC-0 CITY-LOC-1) (ROAD CITY-LOC-1 CITY-LOC-0) (ROAD CITY-LOC-1 CITY-LOC-2) (ROAD CITY-LOC-2 CITY-LOC-1)(AT TRUCK-0 CITY-LOC-2))|#
-      (state-type (delete-duplicates (car (apply #'mapcar #'list (hddl:hddl-problem-init-status *problem*))))) ; (ROAD AT)
+      (state-types (delete-duplicates (car (apply #'mapcar #'list (hddl:hddl-problem-init-status *problem*))))) ; (ROAD AT)
       (current-status-list (make-hash-table))) 
-  (dotimes (i (length state-type))
-   (setf (gethash (nth i state-type) current-status-list) (remove nil (mapcar #'(lambda(c) (if (eq (first c) (nth i state-type)) (rest c))) current-status)))
+  (loop for state-type in state-types do
+   (setf (gethash state-type current-status-list) (remove nil (mapcar #'(lambda(c) (if (eq (first c) state-type) (rest c))) current-status)))
    )
   (setq *current-status* current-status-list )
   ) 
@@ -514,13 +512,12 @@ following commentary.
 ;; delete-state
 (defun delete-state (neg-effects) ; (AT ?V ?L2)
   "Updates current status by deleting negative effects"
-  (dotimes (i (length neg-effects))
-    (setq operator (nth i neg-effects))
-    (if (gethash (first operator) *current-status*)
-        (let ((hash-value (gethash (first operator) *current-status*))
+  (loop for effect in neg-effects do
+    (if (gethash (first effect) *current-status*)
+        (let ((hash-value (gethash (first effect) *current-status*))
               (new-value nil))
-            (setq new-value (delete-if 'null (mapcar #'(lambda(c)(if(not(equal c (rest operator))) c)) hash-value)))
-            (setf (gethash (first operator) *current-status*) new-value)
+            (setq new-value (delete-if 'null (mapcar #'(lambda(c)(if(not(equal c (rest effect))) c)) hash-value)))
+            (setf (gethash (first effect) *current-status*) new-value)
           )
         ))
 )
@@ -537,13 +534,11 @@ following commentary.
   "Retrieves an preconditions' list that are unsatisfied with current status"
     (let ((satisfied nil)
           (unsatisfied nil))
-          
-     (dotimes (i (length preconditions))   ;;for all preconditions
-          (let ((precondition (nth i preconditions)))
+     (loop for precondition in preconditions do
                (if (find T (mapcar #'(lambda(unit) (equal (rest precondition) unit)) (gethash (first precondition) *current-status*)))
                        (push precondition satisfied)     ;;if the precondition can be found as-is in the currentstatus push it to satisfied
                               ; (format t "precondition: ~A~% value: ~A~%" (rest precondition) (gethash (first precondition) *current-status*))  
-                       (push precondition unsatisfied))));; if the precondition can not be found in the currentstatus push to unsatisfied
+                       (push precondition unsatisfied)));; if the precondition can not be found in the currentstatus push to unsatisfied
       (return-from find-unsatisfied-preconditions (reverse unsatisfied))))
 
 ;;Input: A list of unsatisfied preconditions ((AT TRUCK-0 ?L) (ROAD ?L CITY-LOC-1))
@@ -551,10 +546,10 @@ following commentary.
 (defun all-contain-variables (unsatisfied)
   "Retrieves a preconditions' list appending with a variables-contained positions' list"
   (let ((contain-variables nil))
-      (dotimes (i (length unsatisfied))
-        (let* ((precondition (nth i unsatisfied))  ;;for every precondition in unsatisfy test if it contains a variable, ex. (AT TRUCK-0 ?L)
+      (loop for precondition in unsatisfied do
+        (let* (  ;;for every precondition in unsatisfy test if it contains a variable, ex. (AT TRUCK-0 ?L)
               (position-variables (mapcar #'(lambda(c)(search "?" c)) (mapcar 'symbol-name precondition)))) ;;by testing if any of its components contain a ?, example:(NIL NIL 0)
-              (unless (find-if-not 'null position-variables) (return-from all-contain-variables nil)) ;;if one precondition does not contain a variable return nil 
+          (unless (find-if-not 'null position-variables) (return-from all-contain-variables nil)) ;;if one precondition does not contain a variable return nil 
 
 	   ;if the precondition contains variables, get the variable-positons-list, pair it with the precondition, and push that pair to contain-variables, ex. (precondition (1 2))
 	  (push (cons precondition (list(get-position-list position-variables))) contain-variables)
@@ -643,10 +638,8 @@ following commentary.
   "Retrieves a effects list binding with its parameters"
   (let ((effects-lst nil)
         (effect nil))
-    (dotimes (i (length effects))
-      (setq effect (cons (first (nth i effects)) 
-                         (mapcar #'(lambda(c) (second (assoc c theta))) (rest (nth i effects)))))
-      (push effect effects-lst)
+    (loop for effect in effects do
+      (push (cons (first effect) (mapcar #'(lambda(c) (second (assoc c theta))) (rest effect))) effects-lst)
       )  effects-lst
     )
    
