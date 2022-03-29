@@ -82,6 +82,7 @@ following commentary.
 ;; As long as there are still executable tasks, try to solve them,
 ;; if there are no more tasks left, return the *Plan*.
 (defun shop2-plan (&optional plan tasks state)
+  "The begin of Shop2-Planner"
   (setq *T0* (constraint))
     (loop while *T0* do
   ;;if analyzing subtasks is T take the first task in *T0* as current-task, guaranteeing that the next task will be a subtask, because the subtasks are appended at the beginning of *Tasks*
@@ -98,6 +99,7 @@ following commentary.
 ;; second layer of shop2 
 ;; check if the *current-task* is a primitive or compound-task and continue accordingly
 (defun resolve-task () 
+  "Checks the task as primitive one or not"
   (if (primitivep)
     (update-primitive-task)   
     (update-nonprimitive-task) 
@@ -107,15 +109,17 @@ following commentary.
 ;; third layer of shop2 for primitive tasks
  ;; unify action and update state from primitive tasks
 (defun update-primitive-task ()
+  "Searches for a list of applicable actions through prarameters binding and updates the primitive task"
  (let* ((Actions-lst (action-satisfier)))
         (format t "~%----------------------------------------------~%step of update-primitive-task -> Actions-lst: ~A~%----------------------------------------------~%" Actions-lst)
-                    (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
-                          (t (update-action-values (nth (random (length Actions-lst)) Actions-lst)))
-                    )
+          (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
+                (t (update-action-values (nth (random (length Actions-lst)) Actions-lst)))
+          )
   )
 )
  
 (defun update-action-values (action)
+  "Updates the tasks list and plan and T0 with one applicable action binding with its parameters"
  (let* ((act (action-substitute action)) ; (NOOP TRUCK-0 CITY-LOC-2)
         )
          (modify-status action) ;; add pos-effect & delete neg-effect for current-status
@@ -129,6 +133,7 @@ following commentary.
 
 ;; unify methods and update state from nonprimitive task
 (defun update-nonprimitive-task ()
+  "Searches for a list of applicable methods through parameters binding and updates the non-primitive task"
  (let* ((Methods-lst (method-satisfier))) ; {(m . theta)...}  
      (format t "~%----------------------------------------------~%step-> update-nonprimitive-task -> Methods-lst: ~A~%----------------------------------------------~%" (length Methods-lst))
      (cond ((eq Methods-lst nil) (return-from update-nonprimitive-task nil)) ; if M = empty then return nil to resolve task
@@ -137,12 +142,13 @@ following commentary.
 )
 
 (defun update-nonprimitive-values (method)
+  "Updates tasks list through removment of current task and through concatenation with its parameters-contained subtasks"
    (setq *Tasks* (remove *current-task* *Tasks*) ; modify T by removing t, (removin in constraint-lists happens later through constraining with subtasks!
           subm (mapcar #'hddl:copy-hddl-task (hddl:hddl-method-subtasks (car method)))         
-          theta (cadr method)); in sub(m) to precede the tasks that t precede
-    (setq subm (substitute-tasks-list subm theta) 
-          *Tasks* (modify-constraints subm)) ;;constrain tasks with subtasks where appropriate
-     (setq *Tasks* (append subm *Tasks*))  ;;adding sub(m) -> use append because push adds subtasks as list!
+          theta (cadr method); in sub(m) to precede the tasks that t precede
+           subm (substitute-tasks-list subm theta) 
+          *Tasks* (modify-constraints subm) ;;constrain tasks with subtasks where appropriate
+          *Tasks* (append subm *Tasks*))  ;;adding sub(m) -> use append because push adds subtasks as list!
 (format t "~%----------------------------------------------~%update-nonprimitive-values-> Chosen method: ~A~% Subtasks: ~A~% New-tasks: ~A~%----------------------------------------------~%" method subm *Tasks*)
 ;; (if (not (null subm)) (setq *T0* (constraint subm)))
 (if (not (null subm)) (setq *analyzing-Subtasks* T))
@@ -157,6 +163,7 @@ following commentary.
 ;;        whose second element is its type
 ;; 
 (defun make-lexicon ()
+  "Builds a list of parameters lexicon to bind its variables and its parameters with its types"
   (let ((lexicon nil)
         (method-type nil))
     (mapcar #'(lambda(c)
@@ -175,6 +182,7 @@ following commentary.
 ;;Checks if a task is a primitive task by checking if there is an action of the same name.
 ;; Output: T if the *current-task* is a primitive task; nil if it is not
 (defun primitivep ()
+  "Checkes the current task with its name to seperate the task-formed action and the task-formed method"
  (let ((taskname (hddl:hddl-task-name *current-task*))
       (actionname))
   (loop for a in *actions* do
@@ -189,6 +197,7 @@ following commentary.
 ;;Input: if no tasklist is provided, the global tasklist is used as default value
 ;; Output: *T0*
 (defun constraint(&optional (tasks *Tasks*))
+  "Obtains non-constraints-contained tasks list from tasks"
 (setq *T0* nil)
       (loop for task in tasks do
 		(if (null (hddl:hddl-task-constraints task)) 
@@ -199,6 +208,7 @@ following commentary.
 ;; Input (optional): List of subtasks
 ; ;; Output: *Tasks*
 (defun modify-constraints (&optional (subtasks nil)(tasks *Tasks*))
+  "Concatenates tasks' constraints list with current task"
   (loop for task in tasks do
     (setf (hddl:hddl-task-constraints task)
           (loop for c in (hddl:hddl-task-constraints task) append
@@ -220,6 +230,7 @@ following commentary.
 ;; action's precondition corrspond to current-status
 ;; leave out the satifying action list filtered by current-status
 (defun action-satisfier ()
+  "Obtains an attainable actions list by sieving a possible applicable actions list through current-status"
   (declare (optimize debug))
   (let ((actions-satisfied nil)
         (actions (action-unifier))) ;;{(a.theta)}
@@ -258,6 +269,7 @@ following commentary.
      :POS-EFFECTS NIL)
   ((?L2 CITY-LOC-0 LOCATION) (?V TRUCK-0 VEHICLE))))|#
 (defun action-unifier ()
+  "Seeks applicable actions list through verification actions with parameters parsing"
   (let ((actions-satisfied nil))
     (dotimes (i (length *actions*))
       (setq action (nth i *actions*))
@@ -349,6 +361,7 @@ following commentary.
 ;; pre(m) to be seen as deprecated tuple
 ;; output: {(method . theta)...}
 (defun method-satisfier ()
+  "Obtains an applicable methods list through binding parameters with an verified methods list"
   (let ((methods-satisfied nil))
     (loop for method in *methods* do 
       (if (operator-unifier-p method)
@@ -364,6 +377,7 @@ following commentary.
 ;; output: ((?V TRUCK-0 VEHICLE)) (?L2 CITY-LOC-0 LOCATION)) as theta
 ;; pass to action-satisfier or method-satisfier
 (defun parameters-binding (operator)
+  "Retrieves a parameters' list binding with variables and parameters and its types"
   (let* ((task-params (hddl:hddl-task-parameters *current-task*))
          (variable-position-list (mapcar #'(lambda(c)(search "?" c)) (mapcar 'symbol-name task-params)))
 	(binding-list nil))
@@ -397,6 +411,7 @@ following commentary.
 ;;       each parameter identical from operator (as action or method) and task 
 ;; pass to next function as action-satisfier or method-satisfier 
 (defun operator-unifier-p (operator)
+  "Verifies if operator's name and its parameters' types fitting to current task"
   (declare (optimize debug))
   (let ((op-task-name (if (eql (type-of operator) 'READ-HDDL-PACKAGE::HDDL-ACTION) (hddl:hddl-action-name operator) 
                           (first (hddl:hddl-method-task operator)))) 
@@ -415,6 +430,7 @@ following commentary.
 ;; output: True / False
 ;; pass to next function as operator-unifier-p
 (defun a-identical-parameters-p (task-params op-params) ; (TRUCK-0 CITY-LOC-0) or (TRUCK-0 ?L2) / ((?V VEHICLE) (?L2 LOCATION))
+  "Verifies if parameters' types of current task and of one action fitting"
   (let ((task-type nil))
  (setq task-type (mapcar #'(lambda(c)(second (assoc c *lexicon*))) task-params)) ; (VEHICLE LOCATION)
   (setq op-type (mapcar 'second op-params)) ;(VEHICLE LOCATION) 
@@ -431,6 +447,7 @@ following commentary.
 ;; output: True / False
 ;; pass to next function as operator-unifier-p
 (defun m-identical-parameters-p (task-params m-task-params operator) ; (TRUCK-0 CITY-LOC-0) / (?v ?l2)
+  "Verifies if task's parameters' types of current task and of one method fitting"
   (let ((op-param (hddl:hddl-method-parameters operator)) ;((?V VEHICLE) (?L LOCATION))
         (task-type nil))
        (setq task-type (mapcar #'(lambda(c)(second (assoc c *lexicon*))) task-params)) ; (VEHICLE LOCATION)
@@ -453,6 +470,7 @@ following commentary.
 ;;Initializes *current-status* if it hasn't been initialized yet. 
 ;; output: *current-status*
 (defun get-current-status ()
+  "Retrieves current status as hash table or initializes current status, if it does not exists "
   (if (null *current-status*) (get-initial-status)
       *current-status*)
   )
@@ -461,6 +479,7 @@ following commentary.
 ;; Output: no output, sets *current-status* as a hash-table representing
 ;;the initial status of the problem-world
 (defun get-initial-status () 
+  "Acquires current status as hash table from problem file"
  (let ((problem-types (hddl:hddl-problem-objects *problem*)) ;((CITY-LOC-2 LOCATION) (CITY-LOC-1 LOCATION) (CITY-LOC-0 LOCATION) (TRUCK-0 VEHICLE))
       (current-status (hddl:hddl-problem-init-status *problem*)) #|((ROAD CITY-LOC-0 CITY-LOC-1) (ROAD CITY-LOC-1 CITY-LOC-0) (ROAD CITY-LOC-1 CITY-LOC-2) (ROAD CITY-LOC-2 CITY-LOC-1)(AT TRUCK-0 CITY-LOC-2))|#
       (state-type (delete-duplicates (car (apply #'mapcar #'list (hddl:hddl-problem-init-status *problem*))))) ; (ROAD AT)
@@ -473,6 +492,7 @@ following commentary.
 )
 ;; modify-status
 (defun modify-status (action) ; (action . theta)
+  "Updates current status by its positive and negative effects"
  (let ((pos-effects (hddl:hddl-action-pos-effects (first action)))
        (neg-effects (hddl:hddl-action-neg-effects (first action)))
        (theta (second action)))
@@ -485,7 +505,7 @@ following commentary.
 
 ;; add-state
 (defun add-state (pos-effects)  ; ((AT TRUCK-0 CITY-LOC-2))
-  " "
+  "Updates current status by adding positive effects"
   (loop for effect in pos-effects do
           (setf (gethash (first effect) *current-status*) (union (list (rest effect)) (gethash (first effect) *current-status*)))))
          
@@ -493,6 +513,7 @@ following commentary.
 
 ;; delete-state
 (defun delete-state (neg-effects) ; (AT ?V ?L2)
+  "Updates current status by deleting negative effects"
   (dotimes (i (length neg-effects))
     (setq operator (nth i neg-effects))
     (if (gethash (first operator) *current-status*)
@@ -513,6 +534,7 @@ following commentary.
 ;; Input: a list of preconditions ((AT TRUCK-0 ?L) (ROAD CITY-LOC-1 CITY-LOC-0)) or ((AT TRUCK-0 CITY-LOC-0) (ROAD CITY-LOC-1 CITY-LOC-0))
 ;; Output: a list of the unsatisfied preconditions of an action ((AT TRUCK-0 ?L)) or ((AT TRUCK-0 CITY-LOC-0))
 (defun find-unsatisfied-preconditions (preconditions) 
+  "Retrieves an preconditions' list that are unsatisfied with current status"
     (let ((satisfied nil)
           (unsatisfied nil))
           
@@ -527,6 +549,7 @@ following commentary.
 ;;Input: A list of unsatisfied preconditions ((AT TRUCK-0 ?L) (ROAD ?L CITY-LOC-1))
 ;;Output: A list of preconditions paired with a list of positions of their variables or nil if one precondition does not contain variables (((AT TRUCK-0 ?L) (2)) ((ROAD ?L CITY-LOC-1)(1)))
 (defun all-contain-variables (unsatisfied)
+  "Retrieves a preconditions' list appending with a variables-contained positions' list"
   (let ((contain-variables nil))
       (dotimes (i (length unsatisfied))
         (let* ((precondition (nth i unsatisfied))  ;;for every precondition in unsatisfy test if it contains a variable, ex. (AT TRUCK-0 ?L)
@@ -543,6 +566,7 @@ following commentary.
 ;; Input: a list containing the elements NIL and 0, with a 0 indicating the position of a variable, ex. (nil 0 0)
 ;; output: a list with the positions of 0 in the input list, ex. (1 2)
 (defun get-position-list (lis)
+  "Retrieves a position list where 0 is located"
   (let ((positions nil))
     (dotimes (i (length lis))                    ;;for every element in the list
       (if (eq 0 (nth i lis)) (push i positions)) ;;check if the element equals 0 and push its position i to the positions-list if that is the case
@@ -555,6 +579,7 @@ following commentary.
 ;; output: a list of possible variable-bindings or nil if no binding could be found , ex. (((?L CITY-LOC-2 LOCATION)))
 ;;         or (((?L CITY-LOC-0 LOCATION)) ((?L CITY-LOC-2 LOCATION))) if both possibilities for ?L would satisfy the precondition
 (defun get-variables (precondition)
+  "Retrieves a possible variables' list binding with parameters those are satisfied with current status"
   (let* ((variables nil)    ;;a list of possible variable bindings
         (precond (car precondition)) ; (AT TRUCK-0 ?L)
         (head (car precond)) ; AT
@@ -589,6 +614,7 @@ following commentary.
  ;;Input: a variable-binding of the form (?L CITY-LOC-0)
 ;;Output: the same variable-binding annotated with types (?L CITY-LOC-0 LOCATION) to match elements of theta 
 (defun type-variable-bindings (binding)
+  "Retrieves a parameters' list binding with its types"
   (let ((variable (first binding))
       (typed (assoc (second binding) *lexicon*)))                             
   (return-from type-variable-bindings (cons variable typed))))
@@ -600,6 +626,7 @@ following commentary.
 ;;; substitution with unifier and replace the required variables within each update
 ;; unify variables 
 (defun action-substitute(action)
+  "Retrieves an action's name binding with its parameters from an applicable action"
   (let ((action-name (hddl:hddl-action-name (first action))) ; NOOP
         (action-params (mapcar 'car (hddl:hddl-action-parameters (first action)))) ;(?V ?L2)
         (theta (second action)) ; ((?V TRUCK-0 VEHICLE) (?L2 CITY-LOC-1 LOCATION))
@@ -613,6 +640,7 @@ following commentary.
 ;; input: {(AT ?V ?L2) & ((?V TRUCK-0 VEHICLE)) (?L2 CITY-LOC-0 LOCATION) (?L3 CITY-LOC-1 LOCATION))}
 ;; output: list of effects {(AT TRUCK-0 CITY-LOC-0)}
 (defun effect-substitute(effects theta)
+  "Retrieves a effects list binding with its parameters"
   (let ((effects-lst nil)
         (effect nil))
     (dotimes (i (length effects))
@@ -628,6 +656,7 @@ following commentary.
 ;; Input: a list of action-preconditions, ex. ((AT ?V ?L1) (ROAD ?L1 ?L2)), and a theta
   ;; Output: the list of action-preconditions with substituted variables according to theta, ex. ((AT TRUCK-0 ?L1) (ROAD ?L1 CITY-LOC-1))
   (defun precondition-substitute (action-preconditions theta)
+    "Retrieves a preconditions' list binding with parameters"
     (let ((precondlist nil))
       (unless (listp (first action-preconditions))
         (let ((predicate (first action-preconditions))
@@ -650,6 +679,7 @@ following commentary.
    ;; Input: list of parameter-variables, ex. (?V ?L), and a theta, ex. '((?V TRUCK-0 VEHICLE)(?L2 CITY-LOC-1 LOCATION))
   ;;Output: a list of substituted parameters where a substitution could be found, ex. (TRUCK-0 ?L)
   (defun variable-substitute (parameters theta)
+    "Retrieves a parameters' list through variables parsing"
     (let ((new-parameters nil))
     (loop for e in parameters do
      (let ((new-param 
@@ -661,19 +691,19 @@ following commentary.
 
 
 (defun task-substitute(subtask theta)
+  "Retrieves a subtask binding with its parameters "
  (let ( 
        (theta-params (mapcar 'car theta)) ;(?v ?l2)
        (theta-dot-value (mapcar #'(lambda(c) (cons (car c) (cadr c))) theta)) ;((?V . TRUCK-0) (?L2 . CITY-LOC-1))
        (task-params (hddl:hddl-task-parameters subtask)) ; (?V ?L2) (?V ?L)/ (?V ?L2 ?L3)
        )
-  
-    (setf (hddl:hddl-task-parameters subtask) (sublis theta-dot-value task-params)) ;; if theta is subset of task-params, direct setf 
-           
+    (setf (hddl:hddl-task-parameters subtask) (sublis theta-dot-value task-params)) 
    ) 
  )
 
 ;; subtasks should not be the same list as tasks but should be a copy sequence from nonprimitive values
 (defun substitute-tasks-list (tasklist theta)
+  "Retrives a tasks list binding with its parameters"
      (mapcar #'(lambda(c)
                    (cond ((hddl:hddl-task-constraints c) (and (task-substitute c theta) (setf (hddl:hddl-task-constraints c) (substitute-tasks-list (hddl:hddl-task-constraints c) theta)))); if subtask has constraints, push its task first to *Tasks*
                          (t (task-substitute c theta)))) ; if there is no constraint push to *Tasks*
@@ -683,6 +713,7 @@ following commentary.
 ;--------------------------------------
 ;; Helper functions for output
 (defun planner-output ()
+  "Checks if plan exists and prints the result of plan"
   (if *Plan*
   (format t "Shop2-operator finds the following current possible plan:~% ~A" *Plan*)
   (format t "Shop2-operator cannot find a plan for this problem.~% Please check that your HDDL problem file is solvable with your domain file.")))
@@ -691,4 +722,5 @@ following commentary.
 (defun print-hash-entry (key value)
     (format t "~S: ~S~%" key value))
 (defun tables ()
+  "Prints current status with formatting"
   (maphash #'print-hash-entry *current-status*))
