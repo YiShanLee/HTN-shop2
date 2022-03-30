@@ -9,7 +9,7 @@ following commentary.
 ;;  (load *file*))
 
 ;; main operator of shop2 reads input files and starts the SHOP2-Planner
-(defun main-operator ()
+(defun shop2-operator ()
   "Reads input file and starts the Shop2-Planner"
   (read-input)
   (shop2-plan)
