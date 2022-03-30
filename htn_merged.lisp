@@ -4,10 +4,9 @@ The functions in this file utilize helper-functions and structures from the
 following commentary.
 (nicknames :hddl and :read-hddl).
 |#
-;;(defparameter *file* (probe-file "read_hddl.lisp"))
-;;(eval-when (:compile-toplevel :load-toplevel :execute)
-;;  (load *file*))
-
+(defparameter *file* (probe-file "read_hddl.lisp"))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+ (load *file*))
 ;-----------------------------------------------------------
 ;;Functions for reading of files and defining and initializing of global parameters
 
