@@ -647,7 +647,7 @@ following commentary.
 )
 
 
-(defun update-action-values (action)
+(defun update-primitive-values (action)
   "Updates the tasks list and plan and T0 with one applicable action binding with its parameters"
  (let* ((act (action-substitute action)) ; (NOOP TRUCK-0 CITY-LOC-2)
         )
@@ -656,7 +656,7 @@ following commentary.
          (setq *Tasks* (remove *current-task* *Tasks*)) 
          (modify-constraints)
          (constraint)
-         (format t "~%----------------------------------------------~%update-action-values->~% *Plan*: ~A~% *T0*: ~A~%----------------------------------------------~%" *Plan* *T0*)
+         (format t "~%----------------------------------------------~%update-primitive-values->~% *Plan*: ~A~% *T0*: ~A~%----------------------------------------------~%" *Plan* *T0*)
  ) 
 )
 
@@ -667,7 +667,7 @@ following commentary.
  (let* ((Actions-lst (action-satisfier)))
         (format t "~%----------------------------------------------~%update-primitive-task->~% Actions-lst: ~A~%----------------------------------------------~%" Actions-lst)
           (cond ((eq Actions-lst nil) (return-from update-primitive-task nil))
-                (t (update-action-values (nth (random (length Actions-lst)) Actions-lst)))
+                (t (update-primitive-values (nth (random (length Actions-lst)) Actions-lst)))
           )
   )
 )
