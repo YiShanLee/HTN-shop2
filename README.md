@@ -1,4 +1,4 @@
-# HTN_Planner: Shop2
+# HTN_Planner: SHOP2
 
 This project aims to implement an Hierarchical Task Network (HTN) planning based on [Shop2](https://github.com/cl-axon/shop2.git) using input as HDDL modelling language.  
 
