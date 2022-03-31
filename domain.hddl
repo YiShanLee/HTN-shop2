@@ -6,7 +6,7 @@
 
   (:predicates 
      (road ?l1 ?l2 - location)
-     (at ?x - vehicle ?v - location)
+     (at ?v - vehicle ?l - location)
   )
 
   (:task get-to :parameters (?v - vehicle ?l - location))
