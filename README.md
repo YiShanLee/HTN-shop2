@@ -33,6 +33,6 @@ The program will then run the planner printing out its steps to the console. If 
 *[Datasets of HDDL](https://github.com/panda-planner-dev/ipc2020-domains/tree/master/partial-order/Transport)<br/>
 
 ## Teams
-Alisa Veronique Münsterberg and
+Alisa Véronique Münsterberg and
 Yi-Shan Lee 
 under the guidance of the department of Smart Environments of the Otto-Friedrich-Universität Bamberg.
