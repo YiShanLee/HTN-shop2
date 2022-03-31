@@ -1,7 +1,6 @@
-# HTN_Planner: Shop2
+# HTN_Planner: SHOP2
 
-This project aims to implement an Hierarchical Task Network (HTN) planning based on [Shop2](https://github.com/cl-axon/shop2.git) using input as HDDL modelling language.  
-
+This project implements an Hierarchical Task Network (HTN) planning based on [Shop2 paper](https://www.researchgate.net/publication/220543221_SHOP2_An_HTN_planning_system) using input as HDDL modelling language.  
 
 ## Installation
 Please download the SLIME and Steel Bank Common Lisp compiler locally and install the program through git command. 
@@ -16,17 +15,17 @@ After loading the file, you are ready to run our program with the following comm
 ```lisp
 (shop2-operator)
 ```
-The program will ask for domain.hddl and problem.hddl as follows. Please enter your domain and problem file in the form of HDDL structure. 
+The program will ask for a domain and problem filepath for a domain and problem written in HDDL. Please ensure that these filepaths end in ".hddl". 
 ```lisp
 Enter domain filepath"domain_file.hddl"
 Enter problem filepath"problem_file.hddl"
 ```
-Then, the program will show the possible plan, when it does not drop into local solution.
+The program will then run the planner printing out its steps to the console. If a plan is found it is returned as console-output. If it does not find a plan the algorithm returns nil but the partial plan up to that point can be read from the print out.<br/>
+**Since the planner uses a random heuristic it is possible that even an existing plan cannot be found at the first try. It is therefore recommended to call (shop2-operator) more than once.**
 
 ## Limitations
-+ This project implements the input with simplified HDDL from the resources of Datasets named as Transport. If the user calls inputs from other enlarged resources may cause nonoptimal solution. 
-+ Please follows the formation of HDDL modeling language with respect to simplified version of inputs. Furthermore, the restriction on the complexity of modeling language. This project limits itself merely on totally ordered or unordered subtasks. Also the logic operator (AND, NOT) within effects and precondition of one action or task can be implemented through this project. However, the logical operator of OR in the tasks, preconditions or effects can not be reinforced in this project. 
-+ Through variables-binding, this project does support merely on the same hierarchical layer of parsing type not on the subtasks' layer or on the superset of current-task' layer. 
++ This project takes input in the form of simplified HDDL, without method-preconditions, partial ordering of subtasks and global ordering or constraints on the problem. Furthermore this implementation supports only the logic operators (AND, NOT) within the definition of effects, preconditions and subtasks.  If the user calls input from more complex HDDL-resources this may cause non-optimal solutions.
++ This project supports only backtracking on the layer of one tasklist, i.e. if a chosen task cannot be fulfilled at a point in time the planner will choose another one if there is one. It does not support backtracking from a chosen method once a task has been deconstructed into subtasks.
 
 ## Resources
 *[SBCL](http://www.sbcl.org/) <br/>
@@ -34,6 +33,6 @@ Then, the program will show the possible plan, when it does not drop into local 
 *[Datasets of HDDL](https://github.com/panda-planner-dev/ipc2020-domains/tree/master/partial-order/Transport)<br/>
 
 ## Teams
-Alisa Veronique Münsterberg and
+Alisa Véronique Münsterberg and
 Yi-Shan Lee 
 under the guidance of the department of Smart Environments of the Otto-Friedrich-Universität Bamberg.
