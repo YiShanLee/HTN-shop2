@@ -16,7 +16,7 @@ The components of the  returned domain or problem can themselves contain other s
 	   hddl-action-preconditions hddl-action-neg-effects hddl-action-pos-effects
 	   make-hddl-domain hddl-domain-name hddl-domain-requirements  hddl-domain-types
 	   hddl-domain-predicates hddl-domain-tasks hddl-domain-methods hddl-domain-actions
-	   make-hddl-task hddl-task-name hddl-task-parameters hddl-task-constraints
+	   make-hddl-task hddl-task-name hddl-task-parameters hddl-task-constraints copy-hddl-task 
 	   make-hddl-problem hddl-problem-name hddl-problem-domain  hddl-problem-objects
 	   hddl-problem-tasks hddl-problem-ordering hddl-problem-constraints
 	   hddl-problem-init-status))
@@ -47,23 +47,146 @@ The components of the  returned domain or problem can themselves contain other s
 ;; a list of constraints and the initial status given as a list of ground predicates.
 (defstruct hddl-problem name domain objects tasks ordering constraints init-status)
 
+;---------------------------------------------------------------------------
+;;Helper-functions for read-hddl-domain and read-hddl-problem
+
+;;Reads in a file from a filepath.
+;;Input: a filepath as a string
+;;Output: the contents of the file as a stream
+(defun read-file (filename)
+  "Reads in a file from a filepath."
+  (with-open-file (in filename)
+    (read in))) 
+
+;;Takes a list that may begin with "AND" and returns the same list without and or the input list without changes if there was no "AND"		   
+;;Input: a list
+;;Output: the same list with removed "AND" if there was one
+(defun remove-and (list)
+  "Takes a list that may begin with AND and returns the same list without and or the input list without changes if there was no AND"
+  (let ((newlst nil))
+  (if (equal (string (car list)) "AND")
+      (setq newlst (cdr list))
+      (setq newlst list))))
+
+;;Takes a list of variables and types and returns a list of pairs (variable  type)
+;;Input: a list of variables and types of the form (variable - type) or (variable1 .. variablen - type)
+;;Output: a list of typed variables of the form (variable type)
+
+(defun typing (lst) ;;example input: (?v - vehicle ?l1 ?l2 - location)
+  "Takes a list of variables and types and returns a list of pairs (variable type)"
+  (let* ((p 0) ;;denotes the position in a string
+	 (separateby))
+    
+    (loop for x in lst do  ;;for every element in the list
+      (setq p (+ p 1))     ;;set p +1
+	  (if (equal "-" (string x)) ;; if x is a "-" (denoting the separation between variables and a type)
+	      (push p separateby)))  ;; push p to the list to separate by (the item after "-")
+    (setq separateby (reverse separateby)) ;;example: (2 7)
+    
+    (let ((separate)
+	  (j 0)                               ;;marks the beginning of each separate list of variables with the same type, example: (?v - vehicle)
+	  (typedvariables))
+      
+      (loop for i in separateby do            ;;for every element in separateby
+	(push (subseq lst j (+ i 1)) separate) ;; push the subsequence of the input list starting at j and ending at i+1 to separate, example (subseq lst 0 3) will return (?v - vehicle)
+	(setq j (+ 1 i))                       ;; restart with the position after the extracted subsequence, example: 0 + 3 = 3
+	(if (> j (- (length lst) 1))           ;; if j is now bigger than the last position in the list set it to the last position in the list
+	    (setq j (- (length lst) 1))))     
+      
+      (loop for e in separate do               ;; for every list of (variables - type) in the separate list, example (?v - vehicle)
+	(let ((type (last e))                  ;; let the last element be the type, example: vehicle
+	      (variables (cddr(reverse e))))  ;;let the variables be the list of every item except the last two ( - type), in reverse to preserve ordering when pushing,  example (?v)
+	  (loop for v in variables do               ;;for every variable push the variable with the type as a list to the list of typed variables, example (?v vehicle)
+	     (push (cons v type) typedvariables))))
+      typedvariables)))                           ;;return the list of all typed variables
+
+;;Checks if method-subtasks are of the type ordered-subtasks
+;;Input: a list of methods
+;;Output: a list of HDDL-methods annotated with the slot :ordered-subtasks containing a Boolean indicating whether subtasks are ordered or not
+(defun ordered-subtasks-p (methods)
+  "Checks if method-subtasks are of the type ordered-subtasks"
+  (let ((newmethods)
+	(ordered))
+    (loop for (x name y parameters z task w subtasks) in methods do
+      (if (search "ORDERED" (string w))       ;;if the string before the subtasks contains the word ordered (:ORDERED-SUBTASKS) then set ordered to true, else to nil
+	  (setq ordered t)
+	  (setq ordered nil))
+      
+	  (push (make-hddl-method :name name :parameters (typing parameters) :task task :subtasks subtasks :ordered-subtasks ordered) newmethods));;make HDDL-method and push to new methodslist
+    (reverse newmethods)))
+
+
+
+;;Constrains subtasks of a method with each other if the method has ordered subtasks in such a way
+;;that every subtask is constrained by the subtask(s) before it, to ensure that they are fulfilled in the exact given order.
+;;Input: a list of hddl-methods
+;;Output: a list of hddl-methods with constrained subtasks where subtasks are ordered
+(defun constrain-subtasks (hddl-methods)
+  "Constrains subtasks of a method with each other if the method has ordered subtasks in such a way that every subtask is constrained by the subtask(s) before it, to ensure that they are fulfilled in the exact given order."
+  (let ((new-hddl-methods))
+    
+    (loop for method in hddl-methods do
+	(let ((subtasks  (remove-and (hddl-method-subtasks method))) ;;remove unnecessary "AND" from subtasks-list if present
+	      (new-subtasks)
+	      (ordered nil))
+	  
+	  (if (not (null (hddl-method-ordered-subtasks method))) ;; set ordered to true if the ordered-subtasks slot of the method is not nil -> the subtasks are ordered
+	      (setq ordered t))
+	  
+	  (setq new-subtasks (loop for (name . parameters) in subtasks collect         ;;make HDDL-tasks out of subtasks with empty constraint-lists
+								       (make-hddl-task :name name :parameters parameters :constraints nil)))
+	  
+	  ;;if the subtasks of the method are ordered, constrain the subtasks of the method in such a way that the constraint-list of each subtask  contains the
+	  ;; subtask(s) that are before it in the ordering and thus have to be fulfilled before the subtask can be fulfilled.
+	  (if ordered
+	      (loop for subs on (reverse new-subtasks) do 
+			(setf (hddl-task-constraints (car subs)) 
+				(loop for sub in (cdr subs) collect
+					sub))))
+			
+	  (setf (hddl-method-subtasks method) new-subtasks)) ;;set the newly constrained subtasks as the new subtasks of the method
+	(setq new-hddl-methods (push method new-hddl-methods))) ;; push the method to the list of constrained methods
+    (reverse new-hddl-methods)))                               ;;reverse to preserve previous method-order
+    
+    
+
+;;Separates the effects of a list of actions into positive and negative effects for each contained action
+;; Input: a list of actions
+;; Output: the same list of actions but now annotated with separate positive and negative effects
+
+(defun separate-effects (actions)
+  "Separates the effects of a list of actions into positive and negative effects for each contained action"
+  (loop for action in actions collect                            ;;for every action
+	(let* ((new-action (butlast action))                     ;;keep everything but the effects of an action intact
+	      (effect (remove-and (car (last action))));; make a list of all effects,remove "AND" at the beginning if present
+	      (pos-effects)
+	      (neg-effects)) 
+	  
+	      (loop for e in effect do                  ;;separate effects into pos/neg using keyword "not"
+		(if (equal (string (car e)) "NOT")  
+		    (push (cdr e) neg-effects)
+		    (push (list e) pos-effects)))
+	  (setq new-action (append new-action neg-effects pos-effects)) ;;append the negative and positive effect lists to the actions
+	  new-action)) ;; collect the new actions
+  )
 
 
 ;;---------------------------------------------------------------------------------- 
+;;--------------------------------------------------------------------------------------------------------------------------------
+;; Main functions for reading in domain.hddl and problem.hddl
 
-;;Reads in a HDDL-domain-file and transforms it into a usable HDDL-structure.
+;; Reads in a HDDL-domain-file and transforms it into a usable HDDL-structure.
 ;; Input: a HDDL-domain-filepath as a String
 ;; Output: a HDDL-domain-structure
 
 (defun read-hddl-domain (filename)
+  "Reads in a HDDL-domain-file and transforms it into a usable HDDL-structure."
    (declare (optimize debug))
   (print "Reading domain-file...")
   
   ;;error handling
   (unless (search ".hddl" filename)  
     (error "This function can only read a HDDL file - make sure the file you want to read ends in .hddl! "))
-  (unless (search "domain" filename) 
-    (error "This function can only read a domain-HDDL file - make sure the file you want to read is the domain-file! "))
 
   ;;read in file and separate into htn-components:
   (let* ((read-domain (read-file filename))
@@ -117,7 +240,7 @@ The components of the  returned domain or problem can themselves contain other s
 	    temp-actions (separate-effects actions) ;; for actions first separate effects into positive and negative effects
 	    hddl-actions                            ;;then use that action-list with separated effects to build hddl-actions
 	    (loop for (x name y parameters z preconditions w neg-effects pos-effects) in temp-actions collect
-		      (make-hddl-action :name name :parameters (typing parameters) :preconditions (remove-if-not 'consp preconditions) :neg-effects  neg-effects :pos-effects pos-effects)))
+		      (make-hddl-action :name name :parameters (typing parameters) :preconditions (remove-and preconditions) :neg-effects  neg-effects :pos-effects pos-effects)))
 	    
       ;;Finally combine everything into a HDDL-domain, reversing the task-, method- and actions-lists
       ;;because the lines for those elements in the stream each start with the keyword and they are thus added to the lists in reverse through cons.
@@ -135,14 +258,13 @@ The components of the  returned domain or problem can themselves contain other s
 ;; Output: a HDDL-problem structure
 
 (defun read-hddl-problem (filename)
+  "Reads in a HDDL-problem-files and transforms it into a usable HDDL-problem structure."
   (declare (optimize debug))
   (print "Reading problem-file...")
 
   ;;error handling
   (unless (search ".hddl" filename) 
     (error "This function can only read a HDDL file - make sure the file you want to read ends in .hddl! "))
-  (unless (search "problem" filename) 
-    (error "This function can only read a problem-HDDL file - make sure the file you want to read is the problem-file! "))
   
   (let* ((read-problem (read-file filename))
 	 (objects)
@@ -170,7 +292,7 @@ The components of the  returned domain or problem can themselves contain other s
 	  (constraints))
 
       (if (equal (string (car htn)) "TASKS")
-	  (setq tasks (remove-if-not 'consp (second htn)) ;;remove "AND" at the beginning of the task-list if there is one
+	  (setq tasks (remove-and (second htn)) ;;remove "AND" at the beginning of the task-list if there is one
 		htn (cddr htn)))
       
       (if (equal (string (car htn)) "ORDERING")
@@ -195,114 +317,4 @@ The components of the  returned domain or problem can themselves contain other s
 
 
 
- ;---------------------------------------------------------------------------
-;;Helper-functions for read-hddl-domain and read-hddl-problem
-
-
-;;Reads in a file from a filepath.
-;;Input: a filepath as a string
-;;Output: the contents of the file as a stream
-(defun read-file (filename)
-  (with-open-file (in filename)
-    (read in))) 
-
-
-;;Checks if method-subtasks are of the type ordered-subtasks
-;;Input: a list of methods
-;;Output: a list of HDDL-methods annotated with the slot :ordered-subtasks containing a Boolean indicating whether subtasks are ordered or not
-(defun ordered-subtasks-p (methods)
-  (let ((newmethods)
-	(ordered))
-    (loop for (x name y parameters z task w subtasks) in methods do
-      (if (search "ORDERED" (string w))       ;;if the string before the subtasks contains the word ordered (:ORDERED-SUBTASKS) then set ordered to true, else to nil
-	  (setq ordered t)
-	  (setq ordered nil))
-      
-	  (push (make-hddl-method :name name :parameters (typing parameters) :task task :subtasks subtasks :ordered-subtasks ordered) newmethods));;make HDDL-method and push to new methodslist
-    (reverse newmethods)))
-
-
-
-;;Constrains subtasks of a method with each other if the method has ordered subtasks in such a way
-;;that every subtask is constrained by the subtask(s) before it, to ensure that they are fulfilled in the exact given order.
-;;Input: a list of hddl-methods
-;;Output: a list of hddl-methods with constrained subtasks where subtasks are ordered
-(defun constrain-subtasks (hddl-methods)
-  (let ((new-hddl-methods))
-    
-    (loop for method in hddl-methods do
-	(let ((subtasks  (remove-if-not 'consp(hddl-method-subtasks method))) ;;remove unnecessary "AND" from subtasks-list if present
-	      (new-subtasks)
-	      (ordered nil))
-	  
-	  (if (not (null (hddl-method-ordered-subtasks method))) ;; set ordered to true if the ordered-subtasks slot of the method is not nil -> the subtasks are ordered
-	      (setq ordered t))
-	  
-	  (setq new-subtasks (loop for (name . parameters) in subtasks collect         ;;make HDDL-tasks out of subtasks with empty constraint-lists
-								       (make-hddl-task :name name :parameters parameters :constraints nil)))
-	  
-	  ;;if the subtasks of the method are ordered, constrain the subtasks of the method in such a way that the constraint-list of each subtask  contains the
-	  ;; subtask(s) that are before it in the ordering and thus have to be fulfilled before the subtask can be fulfilled.
-	  (if ordered
-	      (loop for subs on (reverse new-subtasks) do 
-			(setf (hddl-task-constraints (car subs)) 
-				(loop for sub in (cdr subs) collect
-					sub))))
-			
-	  (setf (hddl-method-subtasks method) new-subtasks)) ;;set the newly constrained subtasks as the new subtasks of the method
-	(setq new-hddl-methods (push method new-hddl-methods))) ;; push the method to the list of constrained methods
-    (reverse new-hddl-methods)))                               ;;reverse to preserve previous method-order
-    
-    
-
-;;Separates the effects of a list of actions into positive and negative effects for each contained action
-;; Input: a list of actions
-;; Output: the same list of actions but now annotated with separate positive and negative effects
-
-(defun separate-effects (actions)
-  (loop for action in actions collect                            ;;for every action
-	(let* ((new-action (butlast action))                     ;;keep everything but the effects of an action intact
-	      (effect (remove-if-not 'consp (car (last action))));; make a list of all effects,remove "AND" at the beginning if present
-	      (pos-effects)
-	      (neg-effects)) 
-	  
-	      (loop for e in effect do                  ;;separate effects into pos/neg using keyword "not"
-		(if (equal (string (car e)) "NOT")  
-		    (push (cdr e) neg-effects)
-		    (push (list e) pos-effects)))
-	  (setq new-action (append new-action neg-effects pos-effects)) ;;append the negative and positive effect lists to the actions
-	  new-action)) ;; collect the new actions
-  )
-
-;;Takes a list of variables and types and returns a list of pairs (variable  type)
-;;Input: a list of variables and types of the form (variable - type) or (variable1 .. variablen - type)
-;;Output: a list of typed variables of the form (variable type)
-
-(defun typing (lst) ;;example input: (?v - vehicle ?l1 ?l2 - location)
-  (let* ((p 0) ;;denotes the position in a string
-	 (separateby))
-    
-    (loop for x in lst do  ;;for every element in the list
-      (setq p (+ p 1))     ;;set p +1
-	  (if (equal "-" (string x)) ;; if x is a "-" (denoting the separation between variables and a type)
-	      (push p separateby)))  ;; push p to the list to separate by (the item after "-")
-    (setq separateby (reverse separateby)) ;;example: (2 7)
-    
-    (let ((separate)
-	  (j 0)                               ;;marks the beginning of each separate list of variables with the same type, example: (?v - vehicle)
-	  (typedvariables))
-      
-      (loop for i in separateby do            ;;for every element in separateby
-	(push (subseq lst j (+ i 1)) separate) ;; push the subsequence of the input list starting at j and ending at i+1 to separate, example (subseq lst 0 3) will return (?v - vehicle)
-	(setq j (+ 1 i))                       ;; restart with the position after the extracted subsequence, example: 0 + 3 = 3
-	(if (> j (- (length lst) 1))           ;; if j is now bigger than the last position in the list set it to the last position in the list
-	    (setq j (- (length lst) 1))))     
-      
-      (loop for e in separate do               ;; for every list of (variables - type) in the separate list, example (?v - vehicle)
-	(let ((type (last e))                  ;; let the last element be the type, example: vehicle
-	      (variables (cddr(reverse e))))  ;;let the variables be the list of every item except the last two ( - type), in reverse to preserve ordering when pushing,  example (?v)
-	  (loop for v in variables do               ;;for every variable push the variable with the type as a list to the list of typed variables, example (?v vehicle)
-	     (push (cons v type) typedvariables))))
-      typedvariables)))                           ;;return the list of all typed variables
-		   
-
+ 
