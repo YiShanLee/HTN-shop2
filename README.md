@@ -20,7 +20,8 @@ The program will ask for a domain and problem filepath for a domain and problem 
 Enter domain filepath"domain_file.hddl"
 Enter problem filepath"problem_file.hddl"
 ```
-Then, the program will show the possible plan, when it does not drop into local solution.
+The program will then run the planner printing out its steps to the console. If a plan is found it is returned as console-output. If it does not find a plan the algorithm returns nil but the partial plan up to that point can be read from the print out.
+**Since the planner uses a random heuristic it is possible that even an existing plan cannot be found at the first try. It is therefore recommended to call (shop2-operator) more than once.**
 
 ## Limitations
 + This project implements the input with simplified HDDL from the resources of Datasets named as Transport. If the user calls inputs from other enlarged resources may cause nonoptimal solution. 
