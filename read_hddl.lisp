@@ -267,8 +267,6 @@ The components of the  returned domain or problem can themselves contain other s
   ;;error handling
   (unless (search ".hddl" filename) 
     (error "This function can only read a HDDL file - make sure the file you want to read ends in .hddl! "))
-  (unless (search "problem" filename) 
-    (error "This function can only read a problem-HDDL file - make sure the file you want to read is the problem-file! "))
   
   (let* ((read-problem (read-file filename))
 	 (objects)
