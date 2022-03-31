@@ -24,9 +24,8 @@ The program will then run the planner printing out its steps to the console. If 
 **Since the planner uses a random heuristic it is possible that even an existing plan cannot be found at the first try. It is therefore recommended to call (shop2-operator) more than once.**
 
 ## Limitations
-+ This project implements the input with simplified HDDL from the resources of Datasets named as Transport. If the user calls inputs from other enlarged resources may cause nonoptimal solution. 
-+ Please follows the formation of HDDL modeling language with respect to simplified version of inputs. Furthermore, the restriction on the complexity of modeling language. This project limits itself merely on totally ordered or unordered subtasks. Also the logic operator (AND, NOT) within effects and precondition of one action or task can be implemented through this project. However, the logical operator of OR in the tasks, preconditions or effects can not be reinforced in this project. 
-+ Through variables-binding, this project does support merely on the same hierarchical layer of parsing type not on the subtasks' layer or on the superset of current-task' layer. 
++ This project takes input in the form of simplified HDDL, without method-preconditions, partial ordering of subtasks and global ordering or constraints on the problem. Furthermore this implementation supports only the logic operators (AND, NOT) within the definition of effects, preconditions and subtasks.  If the user calls input from more complex HDDL-resources this may cause non-optimal solutions.
++ This project supports only backtracking on the layer of one tasklist, i.e. if a chosen task cannot be fulfilled at a point in time the planner will choose another one if there is one. It does not support backtracking from a chosen method once a task has been deconstructed into subtasks.
 
 ## Resources
 *[SBCL](http://www.sbcl.org/) <br/>
