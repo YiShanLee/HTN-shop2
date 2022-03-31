@@ -123,7 +123,7 @@ following commentary.
 ;; input: {(AT ?V ?L2) & ((?V TRUCK-0 VEHICLE)) (?L2 CITY-LOC-0 LOCATION) (?L3 CITY-LOC-1 LOCATION))}
 ;; output: list of effects {(AT TRUCK-0 CITY-LOC-0)}
 (defun effect-substitute(effects theta)
-  "Retrieves a effects list binding with its parameters"
+  "Retrieves an effects list binding with its parameters"
   (let ((effects-lst nil))
     (loop for effect in effects do
       (push (cons (first effect) (mapcar #'(lambda(c) (second (assoc c theta))) (rest effect))) effects-lst)
@@ -435,7 +435,7 @@ following commentary.
 ;; Input: a list of preconditions ((AT TRUCK-0 ?L) (ROAD CITY-LOC-1 CITY-LOC-0)) or ((AT TRUCK-0 CITY-LOC-0) (ROAD CITY-LOC-1 CITY-LOC-0))
 ;; Output: a list of the unsatisfied preconditions of an action ((AT TRUCK-0 ?L)) or ((AT TRUCK-0 CITY-LOC-0))
 (defun find-unsatisfied-preconditions (preconditions) 
-  "Retrieves an preconditions' list that are unsatisfied with current status"
+  "Retrieves a preconditions' list that are unsatisfied with current status"
     (let ((satisfied nil)
           (unsatisfied nil))
      (loop for precondition in preconditions do
