@@ -16,7 +16,7 @@ After loading the file, you are ready to run our program with the following comm
 ```lisp
 (shop2-operator)
 ```
-The program will ask for domain.hddl and problem.hddl as follows. Please enter your domain and problem file in a form of HDDL structure. 
+The program will ask for domain.hddl and problem.hddl as follows. Please enter your domain and problem file in the form of HDDL structure. 
 ```lisp
 Enter domain filepath"domain_file.hddl"
 Enter problem filepath"problem_file.hddl"
