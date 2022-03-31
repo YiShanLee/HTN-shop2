@@ -1,7 +1,6 @@
 # HTN_Planner: SHOP2
 
-This project aims to implement an Hierarchical Task Network (HTN) planning based on [Shop2](https://github.com/cl-axon/shop2.git) using input as HDDL modelling language.  
-
+This project implements an Hierarchical Task Network (HTN) planning based on [Shop2 paper](https://www.researchgate.net/publication/220543221_SHOP2_An_HTN_planning_system) using input as HDDL modelling language.  
 
 ## Installation
 Please download the SLIME and Steel Bank Common Lisp compiler locally and install the program through git command. 
